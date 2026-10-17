@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hunch 21</title>
+<meta name="description" content="Pass-the-phone guessing game: estimate facts from 0 to 10 and stop before 21.">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hunch 21">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#E8EDF3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F141E" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+[hidden]{display:none!important}
+img{max-width:100%}
+/* Layout: one phone-width column, a sticky top bar, a score strip, one big card, and a chunky 0-10 keypad under it. */
+:root{
+  --bg:#E8EDF3; --surface:#FFFFFF; --ink:#15213B; --muted:#5A6678; --line:#C9D3DF;
+  --card:#2C2F78; --card-ink:#FFFFFF; --card-glow:#5B5FD6;
+  --accent:#F06F2A; --accent-ink:#17120F;
+  --good:#1D8A66; --bad:#C43A2C; --warn:#9A6A12; --focus:#1F6FEB;
+  --font-display:ui-rounded,"SF Pro Rounded","Arial Rounded MT Bold","Baloo 2","Trebuchet MS","Segoe UI",sans-serif;
+  --font-body:-apple-system,system-ui,"Segoe UI",Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F141E; --surface:#1A2230; --ink:#ECF0F6; --muted:#A4AEBE; --line:#33405A;
+    --card:#3A3EA8; --card-ink:#FFFFFF; --card-glow:#7A7EF0;
+    --accent:#FF8A47; --accent-ink:#17120F;
+    --good:#45C294; --bad:#F27362; --warn:#E0B04F; --focus:#7AB4FF;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F141E; --surface:#1A2230; --ink:#ECF0F6; --muted:#A4AEBE; --line:#33405A;
+  --card:#3A3EA8; --card-ink:#FFFFFF; --card-glow:#7A7EF0;
+  --accent:#FF8A47; --accent-ink:#17120F;
+  --good:#45C294; --bad:#F27362; --warn:#E0B04F; --focus:#7AB4FF;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:16px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0;
+  -webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.app{max-width:520px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;gap:14px;padding-bottom:28px}
+h1,h2,h3{font-family:var(--font-display);line-height:1.1;margin:0;text-wrap:balance}
+h1{font-size:2.6rem;font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.5rem;font-weight:800}
+h3{font-size:1.1rem;font-weight:800}
+p{margin:0}
+.muted{color:var(--muted)}
+.small{font-size:.9rem}
+.num-tab{font-variant-numeric:tabular-nums}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+[tabindex="-1"]:focus{outline:none}
+
+/* top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;align-items:center;justify-content:space-between;gap:8px;padding-block:10px 6px;border-bottom:1px solid var(--line)}
+.brand{font-family:var(--font-display);font-weight:800;font-size:1.25rem;display:flex;align-items:center;gap:8px}
+.brand .mark{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:9px;background:var(--card);color:var(--card-ink);font-size:1.05rem;box-shadow:0 2px 0 var(--card-glow) inset}
+.topbar .meta{font-size:.9rem;color:var(--muted)}
+.iconbtn{font:inherit;font-weight:700;background:var(--surface);color:var(--ink);border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+
+/* buttons */
+.btn{font:inherit;font-weight:700;font-size:1.05rem;border:0;border-radius:14px;padding:14px 18px;cursor:pointer;width:100%;color:var(--ink);background:var(--surface);border:1.5px solid var(--line);transition:transform .08s ease}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn-accent{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row>*{flex:1 1 140px;min-width:0}
+.stack{display:flex;flex-direction:column;gap:12px}
+
+/* setup */
+.hero{padding-block:22px 6px}
+.hero .tag{font-family:var(--font-display);font-weight:600;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;font-size:.85rem}
+.panel{background:var(--surface);border:1.5px solid var(--line);border-radius:18px;padding:16px}
+label{font-weight:700;font-size:.95rem}
+.field{display:flex;flex-direction:column;gap:6px}
+input[type=text]{font:inherit;font-size:1.05rem;padding:10px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+.stepper{display:flex;align-items:center;gap:10px}
+.stepper button{font-family:var(--font-display);font-size:1.5rem;font-weight:800;width:48px;height:48px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.stepper output{font-family:var(--font-display);font-size:1.8rem;font-weight:800;min-width:2ch;text-align:center}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--bg);padding:4px;border-radius:12px;border:1.5px solid var(--line)}
+.seg button{font:inherit;font-weight:700;padding:10px 8px;border:0;border-radius:9px;background:transparent;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:380px){.names{grid-template-columns:1fr}}
+
+/* score strip */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}
+.chip{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.chip.current{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.chip .name{font-weight:700;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .est{font-family:var(--font-display);font-size:1.5rem;font-weight:800;line-height:1}
+.chip .sub{font-size:.78rem;color:var(--muted)}
+.chip.stopped{opacity:.75}
+.chip.stopped .est{color:var(--muted)}
+.pill{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1.5px solid currentColor;align-self:flex-start}
+.pill.turn{color:var(--accent)}
+.pill.stop{color:var(--muted)}
+.pill.pts{color:var(--good)}
+
+/* the card */
+.card{background:var(--card);color:var(--card-ink);border-radius:22px;padding:26px 20px 22px;min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;
+  box-shadow:0 10px 24px -14px var(--card-glow), inset 0 0 0 5px var(--card), inset 0 0 0 7px rgba(255,255,255,.28)}
+.card .q{font-family:var(--font-display);font-size:1.45rem;font-weight:800;line-height:1.2;text-wrap:balance;max-width:28ch}
+.card .mark{font-family:var(--font-display);font-size:1.5rem;font-weight:800;color:var(--accent);line-height:1}
+.card .note{font-size:.9rem;opacity:.9}
+.card.flip{animation:deal .35s ease-out}
+@keyframes deal{from{transform:translateY(-10px) scale(.97);opacity:0}to{transform:none;opacity:1}}
+
+.turnline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.turnline .who{font-family:var(--font-display);font-size:1.35rem;font-weight:800}
+.turnline .tally{font-size:.95rem;color:var(--muted)}
+.turnline .tally b{font-family:var(--font-display);font-size:1.25rem;color:var(--ink)}
+
+/* keypad */
+.pad{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.num{font-family:var(--font-display);font-size:1.7rem;font-weight:800;padding:12px 0;border-radius:14px;background:var(--surface);color:var(--ink);border:2px solid var(--line);cursor:pointer;min-height:58px;transition:transform .08s ease}
+.num:active{transform:scale(.95)}
+.num.stopbtn{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-size:1.15rem;letter-spacing:.02em}
+.num.stopbtn[disabled]{background:var(--surface);color:var(--muted);border-color:var(--line);opacity:.7;cursor:not-allowed}
+.hint{font-size:.9rem;color:var(--muted);text-align:center}
+
+/* hand-off */
+.handoff{text-align:center;padding-block:30px 10px;display:flex;flex-direction:column;gap:14px;align-items:center}
+.handoff .big{font-family:var(--font-display);font-size:2.2rem;font-weight:800;line-height:1.05}
+.handoff .last{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;width:100%}
+
+/* reveal */
+.rev{background:var(--surface);border:1.5px solid var(--line);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.rev header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.rev .total{font-family:var(--font-display);font-size:1.6rem;font-weight:800}
+.rev .total small{font-family:var(--font-body);font-size:.85rem;font-weight:400;color:var(--muted)}
+.rev ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rev li{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;border-top:1px solid var(--line);padding-top:8px}
+.val{font-family:var(--font-display);font-weight:800;font-size:1.3rem;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--card);color:var(--card-ink)}
+.val.guess{background:var(--bg);color:var(--muted);font-size:.95rem}
+.why{font-size:.9rem;color:var(--muted)}
+.badge{font-family:var(--font-display);font-weight:800;font-size:.95rem;padding:4px 10px;border-radius:999px;border:2px solid currentColor}
+.badge.safe{color:var(--good)}
+.badge.bust{color:var(--bad)}
+.badge.win{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.badge.exact{color:var(--card-ink);background:var(--card);border-color:var(--card)}
+
+/* results */
+.banner{background:var(--card);color:var(--card-ink);border-radius:18px;padding:18px;text-align:center;display:flex;flex-direction:column;gap:6px}
+.banner .big{font-family:var(--font-display);font-size:1.9rem;font-weight:800;line-height:1.1}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+td.n,th.n{text-align:right}
+tr.champ td{font-weight:700}
+
+/* rules dialog */
+dialog{border:0;border-radius:18px;padding:0;background:var(--surface);color:var(--ink);width:min(92vw,520px);max-height:85vh}
+dialog::backdrop{background:rgba(10,14,22,.6)}
+.dlg{padding:18px;display:flex;flex-direction:column;gap:12px;max-height:85vh;overflow:auto}
+.dlg ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.dlg .close{align-self:flex-end}
+.confirm{display:flex;gap:8px;flex-wrap:wrap}
+@media (prefers-reduced-motion: reduce){.card.flip{animation:none}.btn,.num{transition:none}}
+.sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand"><span class="mark" aria-hidden="true">?</span><span>Hunch 21</span></div>
+    <div class="meta num-tab" id="meta"></div>
+    <button class="iconbtn" id="rulesBtn" type="button">How to play</button>
+  </header>
+
+  <div class="sr" role="status" aria-live="polite" id="live"></div>
+
+  <!-- SETUP -->
+  <section id="s-setup" class="stack">
+    <div class="hero stack">
+      <p class="tag">Guess facts. Stop before 21.</p>
+      <h1 tabindex="-1">Hunch 21</h1>
+      <p class="muted">Every question has an answer from 0 to 10. Guess it, take the card, and keep going until your gut says stop. Closest to 21 without going over wins. Everyone plays for themselves.</p>
+    </div>
+    <div id="resumeBox" class="panel stack" hidden>
+      <h3>A game is in progress</h3>
+      <p class="muted small" id="resumeText"></p>
+      <div class="row">
+        <button class="btn btn-primary" id="resumeBtn" type="button">Resume game</button>
+        <button class="btn" id="discardBtn" type="button">Start over</button>
+      </div>
+    </div>
+    <div class="panel stack">
+      <div class="field">
+        <label for="countOut">Players (2 to 6)</label>
+        <div class="stepper">
+          <button type="button" id="minus" aria-label="Fewer players">&minus;</button>
+          <output id="countOut" for="minus plus">4</output>
+          <button type="button" id="plus" aria-label="More players">+</button>
+        </div>
+      </div>
+      <div class="names" id="names"></div>
+      <div class="field">
+        <label id="modeLabel">Game length</label>
+        <div class="seg" role="group" aria-labelledby="modeLabel">
+          <button type="button" id="modeSingle" aria-pressed="true">One game</button>
+          <button type="button" id="modeSeries" aria-pressed="false">Series to 3 points</button>
+        </div>
+        <p class="muted small" id="modeHelp">One round of guessing. Closest to 21 without going over takes it.</p>
+      </div>
+      <button class="btn btn-accent" id="startBtn" type="button">Deal the first card</button>
+    </div>
+    <p class="muted small"><span id="bankCount">372</span> original questions, and no question repeats until the whole deck has been used. The phone keeps the answers hidden until the reveal. Works offline once installed. Build a2477df4.</p>
+  </section>
+
+  <!-- HAND-OFF -->
+  <section id="s-handoff" class="handoff" hidden>
+    <div class="last" id="lastAction"></div>
+    <p class="muted">Pass the phone to</p>
+    <h2 class="big" id="handName" tabindex="-1"></h2>
+    <button class="btn btn-primary" id="handBtn" type="button">Show me the question</button>
+  </section>
+
+  <!-- TURN -->
+  <section id="s-turn" class="stack" hidden>
+    <div class="strip" id="strip"></div>
+    <div class="turnline">
+      <h2 class="who" id="turnWho" tabindex="-1"></h2>
+      <div class="tally num-tab" id="turnTally"></div>
+    </div>
+    <div class="card" id="card">
+      <div class="mark" aria-hidden="true">?</div>
+      <p class="q" id="cardQ"></p>
+      <p class="note" id="cardNote" hidden></p>
+    </div>
+    <p class="hint" id="padHint">Tap your guess. The real answer stays hidden until the end.</p>
+    <div class="pad" id="pad" role="group" aria-label="Your guess, 0 to 10"></div>
+  </section>
+
+  <!-- REVEAL -->
+  <section id="s-reveal" class="stack" hidden>
+    <h2 tabindex="-1">The reveal</h2>
+    <p class="muted small">Cards flip in the order players stopped. First to stop goes first.</p>
+    <div class="stack" id="revealList"></div>
+    <button class="btn btn-primary" id="revealBtn" type="button">Flip the next player's cards</button>
+  </section>
+
+  <!-- RESULTS -->
+  <section id="s-results" class="stack" hidden>
+    <div class="banner" id="banner"></div>
+    <div class="panel stack" id="standingsBox">
+      <h3 id="standingsTitle">Standings</h3>
+      <div style="overflow-x:auto"><table id="standings"></table></div>
+      <p class="muted small" id="standingsNote"></p>
+    </div>
+    <div class="row" id="resultActions"></div>
+  </section>
+
+  <!-- RULES -->
+  <dialog id="rules" aria-labelledby="rulesTitle">
+    <div class="dlg">
+      <h2 id="rulesTitle">How to play</h2>
+      <ul>
+        <li><b>Every card is a question</b> whose answer is a whole number from 0 to 10. The phone hides the real answer until the end.</li>
+        <li><b>On your turn</b>, read the question, tap your best guess, and the card goes into your hand. Your running total of guesses is shown on your chip.</li>
+        <li><b>You can stop</b> once you hold at least two cards. When you stop, you are done for the game, and the question you declined passes to the next player.</li>
+        <li><b>The game ends</b> when everyone has stopped. Cards flip in the order players stopped, showing the real answers.</li>
+        <li><b>Closest to 21 without going over wins.</b> Ties share the win. If everyone goes over, nobody wins.</li>
+        <li><b>Series to 3 points:</b> the winner of each game scores 2 points. Everyone else scores 1 point if they stayed at or under 21, and 0 if they went over. First to 3 points takes the series. If several players reach 3 points in the same game and are tied at the top, they play a tiebreaker game among themselves.</li>
+        <li><b>Hitting exactly 21</b> in a series wins the whole series on the spot (if two players hit 21 in the same game, it counts as a shared game win instead).</li>
+        <li><b>Card statistics:</b> the deck leans toward the middle. Answers of 3 to 7 are the most common, and the average card is worth about 5.</li>
+      </ul>
+      <div class="confirm" id="quitBox" hidden>
+        <button class="btn" id="quitBtn" type="button">End this game and go to setup</button>
+      </div>
+      <button class="btn close" id="rulesClose" type="button">Close</button>
+    </div>
+  </dialog>
+</div>
+<script>
+const BANK = [
+// value 0
+{q:"Number of moons orbiting Venus",a:0,why:"Venus has no moons at all."},
+{q:"Number of legs on a snake",a:0,why:"Snakes lost their legs tens of millions of years ago."},
+{q:"Temperature in degrees Celsius at which water freezes",a:0,why:"Zero degrees Celsius is the freezing point of water."},
+{q:"Number of countries that share a land border with Australia",a:0,why:"Australia is an island continent with no land neighbors."},
+{q:"Number of teeth in a blue whale's mouth",a:0,why:"Blue whales filter food through baleen plates, not teeth."},
+{q:"Number of Grand Slam singles titles won by Anna Kournikova",a:0,why:"She reached a Grand Slam semifinal but never won a singles title."},
+{q:"Number of Best Director Oscars won by Alfred Hitchcock",a:0,why:"Five nominations, zero wins. He received only an honorary award."},
+{q:"Number of true bones in a shark's skeleton",a:0,why:"A shark's skeleton is made entirely of cartilage."},
+{q:"Number of Super Bowls won by the Detroit Lions",a:0,why:"The Lions have never won, or even played in, a Super Bowl."},
+// value 1
+{q:"Number of Oscars won by Leonardo DiCaprio",a:1,why:"Best Actor for The Revenant in 2016, after years of near misses."},
+{q:"Number of U.S. states whose names start with the letter P",a:1,why:"Pennsylvania is the only one."},
+{q:"Number of letters of the alphabet that appear in no U.S. state name",a:1,why:"Only the letter Q is missing from every state name."},
+{q:"Number of horns on an Indian rhinoceros",a:1,why:"The greater one-horned rhino has a single horn."},
+{q:"Number of Super Bowls won by the New Orleans Saints",a:1,why:"Super Bowl XLIV in February 2010."},
+{q:"Number of World Series titles won by the Chicago Cubs since 1910",a:1,why:"Just the 2016 title, ending a 108-year drought."},
+{q:"Number of stars on the flag of Texas",a:1,why:"The Lone Star flag has exactly one."},
+{q:"Number of humps on a dromedary camel",a:1,why:"Dromedaries have one hump. Bactrian camels have two."},
+{q:"Number of U.S. presidents who have resigned from office",a:1,why:"Richard Nixon in 1974 is the only one."},
+{q:"Number of countries that share a land border with Denmark",a:1,why:"Only Germany. The bridge to Sweden is not a land border."},
+{q:"Number of countries that share a land border with Portugal",a:1,why:"Spain is Portugal's only neighbor."},
+{q:"Number of official time zones in China",a:1,why:"The whole country runs on Beijing time."},
+{q:"Number of cities that have hosted both the Summer and Winter Olympics",a:1,why:"Beijing hosted the 2008 Summer and 2022 Winter Games."},
+{q:"Number of U.S. states named after a president",a:1,why:"Washington is the only one."},
+// value 2
+{q:"Number of Nobel Prizes won by Marie Curie",a:2,why:"Physics in 1903 and Chemistry in 1911."},
+{q:"Number of Oscars won by The Wizard of Oz (1939)",a:2,why:"Best Original Score and Best Original Song, for Over the Rainbow."},
+{q:"Number of humps on a Bactrian camel",a:2,why:"Bactrian camels carry two humps."},
+{q:"Number of U.S. states that do not observe daylight saving time",a:2,why:"Arizona (outside the Navajo Nation) and Hawaii."},
+{q:"Number of bones in the human forearm",a:2,why:"The radius and the ulna."},
+{q:"Number of players on a beach volleyball team",a:2,why:"Beach volleyball is played two against two."},
+{q:"Number of countries that share a land border with the United States",a:2,why:"Canada and Mexico."},
+{q:"Number of official languages of Canada",a:2,why:"English and French."},
+{q:"Number of moons orbiting Mars",a:2,why:"Phobos and Deimos."},
+{q:"Number of Harry Potter films directed by Chris Columbus",a:2,why:"The first two: Sorcerer's Stone and Chamber of Secrets."},
+{q:"Number of actors who have won an Oscar for playing the Joker",a:2,why:"Heath Ledger (2009) and Joaquin Phoenix (2020)."},
+{q:"Number of father-and-son pairs who have both served as U.S. president",a:2,why:"The Adamses and the Bushes."},
+{q:"Number of brothers in the Mario Bros.",a:2,why:"Mario and Luigi."},
+{q:"Number of chambers in a fish's heart",a:2,why:"One atrium and one ventricle."},
+{q:"Number of times the letter P appears in the word Mississippi",a:2,why:"M-i-s-s-i-s-s-i-p-p-i: two Ps."},
+// value 3
+{q:"Number of hearts in an octopus",a:3,why:"Two pump blood to the gills and one to the rest of the body."},
+{q:"Number of times Ross Geller gets divorced on Friends",a:3,why:"Carol, Emily, and Rachel."},
+{q:"Number of eyelids on each eye of a camel",a:3,why:"Two with lashes plus a thin third lid that wipes away sand."},
+{q:"Number of chambers in a frog's heart",a:3,why:"Two atria and one ventricle."},
+{q:"Number of films in Peter Jackson's The Hobbit series",a:3,why:"An Unexpected Journey, The Desolation of Smaug, and The Battle of the Five Armies."},
+{q:"Number of Super Bowls won by the Denver Broncos",a:3,why:"Super Bowls XXXII, XXXIII, and 50."},
+{q:"Number of horizontal stripes on the flag of Germany",a:3,why:"Black, red, and gold."},
+{q:"Number of bones in one human middle ear",a:3,why:"The hammer, anvil, and stirrup, the smallest bones in the body."},
+{q:"Number of countries that share a land border with Mexico",a:3,why:"The United States, Guatemala, and Belize."},
+{q:"Number of Oscars won by Meryl Streep",a:3,why:"Kramer vs. Kramer, Sophie's Choice, and The Iron Lady."},
+{q:"Number of witches in Shakespeare's Macbeth",a:3,why:"The three Weird Sisters."},
+{q:"Number of feet in a yard",a:3,why:"Three feet make a yard."},
+{q:"Number of musketeers in the title of the Dumas novel",a:3,why:"The Three Musketeers, even though D'Artagnan makes four."},
+{q:"Number of Back to the Future films",a:3,why:"1985, 1989, and 1990."},
+{q:"Number of living elephant species",a:3,why:"African savanna, African forest, and Asian elephants."},
+{q:"Number of stars on the flag of the Philippines",a:3,why:"One for each main island group: Luzon, Visayas, and Mindanao."},
+{q:"Number of goals in a hat trick",a:3,why:"Three goals by one player in a single game."},
+{q:"Number of brothers in the band the Jonas Brothers",a:3,why:"Kevin, Joe, and Nick."},
+// value 4
+{q:"Number of compartments in a cow's stomach",a:4,why:"Rumen, reticulum, omasum, and abomasum."},
+{q:"Number of wings on a honeybee",a:4,why:"Two pairs, hooked together in flight."},
+{q:"Number of presidents carved into Mount Rushmore",a:4,why:"Washington, Jefferson, Theodore Roosevelt, and Lincoln."},
+{q:"Number of syllables in the word Mississippi",a:4,why:"Mis-sis-sip-pi."},
+{q:"Number of times the letter S appears in the word Mississippi",a:4,why:"Four Ss, in two pairs."},
+{q:"Number of time zones in the contiguous United States",a:4,why:"Eastern, Central, Mountain, and Pacific."},
+{q:"Number of countries that share a land border with Thailand",a:4,why:"Myanmar, Laos, Cambodia, and Malaysia."},
+{q:"Number of houses at Hogwarts",a:4,why:"Gryffindor, Hufflepuff, Ravenclaw, and Slytherin."},
+{q:"Number of strings on a standard bass guitar",a:4,why:"Four strings, tuned E, A, D, G."},
+{q:"Number of Super Bowls won by the Green Bay Packers",a:4,why:"Super Bowls I, II, XXXI, and XLV."},
+{q:"Number of Grand Slam tennis tournaments held each year",a:4,why:"Australian Open, French Open, Wimbledon, and the US Open."},
+{q:"Number of Teenage Mutant Ninja Turtles",a:4,why:"Leonardo, Donatello, Raphael, and Michelangelo."},
+{q:"Number of different bases in DNA",a:4,why:"Adenine, thymine, cytosine, and guanine."},
+{q:"Number of main islands of Japan",a:4,why:"Honshu, Hokkaido, Kyushu, and Shikoku."},
+{q:"Number of toes on a cat's hind paw",a:4,why:"Four in back, five in front (the fifth is the dewclaw)."},
+{q:"Number of Shrek feature films released so far",a:4,why:"Shrek, Shrek 2, Shrek the Third, and Shrek Forever After. Shrek 5 is due in 2027."},
+{q:"Number of hobbits in the Fellowship of the Ring",a:4,why:"Frodo, Sam, Merry, and Pippin."},
+{q:"Number of U.S. states that share a border with Mississippi",a:4,why:"Tennessee, Alabama, Louisiana, and Arkansas."},
+{q:"Number of Oscars won by Katharine Hepburn",a:4,why:"The record for acting wins: 1934, 1968, 1969, and 1982."},
+{q:"Number of U.S. states whose names begin with the word New",a:4,why:"New Hampshire, New Jersey, New Mexico, and New York."},
+{q:"Number of seasons of The Good Place",a:4,why:"The show ran four seasons, 2016 to 2020."},
+// value 5
+{q:"Number of hearts (aortic arches) in an earthworm",a:5,why:"Five pairs of pumping arches circle the worm's gut."},
+{q:"Number of rings in the Olympic logo",a:5,why:"Five interlocking rings."},
+{q:"Number of oceans recognized by National Geographic",a:5,why:"Pacific, Atlantic, Indian, Arctic, and Southern."},
+{q:"Number of books in The Hunger Games series, including the prequels",a:5,why:"The trilogy plus The Ballad of Songbirds and Snakes and Sunrise on the Reaping."},
+{q:"Number of Indiana Jones films starring Harrison Ford",a:5,why:"From Raiders of the Lost Ark (1981) to Dial of Destiny (2023)."},
+{q:"Number of Pirates of the Caribbean films",a:5,why:"Five films between 2003 and 2017."},
+{q:"Number of Great Lakes",a:5,why:"Superior, Michigan, Huron, Erie, and Ontario."},
+{q:"Number of players each basketball team has on the court",a:5,why:"Five per side."},
+{q:"Number of arms on a typical starfish",a:5,why:"Most species have five, though some have as many as forty."},
+{q:"Number of lines in a limerick",a:5,why:"Five lines in an AABBA rhyme scheme."},
+{q:"Number of Spice Girls",a:5,why:"Scary, Sporty, Baby, Ginger, and Posh."},
+{q:"Number of boroughs in New York City",a:5,why:"Manhattan, Brooklyn, Queens, the Bronx, and Staten Island."},
+{q:"Number of Super Bowls won by the Dallas Cowboys",a:5,why:"Super Bowls VI, XII, XXVII, XXVIII, and XXX."},
+{q:"Number of U.S. states with a Pacific Ocean coastline",a:5,why:"California, Oregon, Washington, Alaska, and Hawaii."},
+{q:"Number of permanent members of the United Nations Security Council",a:5,why:"China, France, Russia, the United Kingdom, and the United States."},
+{q:"Number of films in The Twilight Saga",a:5,why:"Breaking Dawn was split into two films, making five."},
+{q:"Number of acts in a Shakespeare play",a:5,why:"Shakespeare's plays follow a five-act structure."},
+{q:"Number of faces on a square pyramid",a:5,why:"Four triangular sides plus the square base."},
+{q:"Number of toes on a cat's front paw",a:5,why:"Four toes plus a dewclaw."},
+{q:"Number of U.S. states with a Gulf of Mexico coastline",a:5,why:"Texas, Louisiana, Mississippi, Alabama, and Florida."},
+// value 6
+{q:"Number of players each team has on the court in indoor volleyball",a:6,why:"Six per side."},
+{q:"Number of legs on an insect",a:6,why:"Six legs, which is what makes an insect an insect."},
+{q:"Number of strings on a standard guitar",a:6,why:"Six strings, tuned E, A, D, G, B, E."},
+{q:"Number of wives of King Henry VIII",a:6,why:"Divorced, beheaded, died, divorced, beheaded, survived."},
+{q:"Number of Super Bowls won by the Pittsburgh Steelers",a:6,why:"Six titles, tied for the most in NFL history."},
+{q:"Number of points for a touchdown in American football",a:6,why:"Six points, before any extra point or two-point try."},
+{q:"Number of Infinity Stones in the Marvel films",a:6,why:"Space, Mind, Reality, Power, Time, and Soul."},
+{q:"Number of main characters on Friends",a:6,why:"Rachel, Monica, Phoebe, Joey, Chandler, and Ross."},
+{q:"Number of NBA championships won by Michael Jordan",a:6,why:"Two three-peats with the Chicago Bulls."},
+{q:"Number of continents with a permanent human population",a:6,why:"Every continent except Antarctica."},
+{q:"Number of feet in a fathom",a:6,why:"A fathom is six feet, used for water depth."},
+{q:"Number of pockets on a standard pool table",a:6,why:"Four corners and two side pockets."},
+{q:"Number of Super Bowls won by the New England Patriots",a:6,why:"Six titles, all with Tom Brady at quarterback."},
+{q:"Number of seasons of Downton Abbey",a:6,why:"Six seasons, 2010 to 2015, before the films."},
+{q:"Number of seasons of Schitt's Creek",a:6,why:"Six seasons, 2015 to 2020."},
+{q:"Number of Oscars won by La La Land",a:6,why:"Six wins, including Best Director and Best Actress."},
+{q:"Number of U.S. states in New England",a:6,why:"Maine, New Hampshire, Vermont, Massachusetts, Rhode Island, and Connecticut."},
+{q:"Number of outs in one full inning of baseball",a:6,why:"Three outs per half inning, two halves."},
+// value 7
+{q:"Number of continents",a:7,why:"Africa, Antarctica, Asia, Australia, Europe, North America, and South America."},
+{q:"Number of Harry Potter books",a:7,why:"Seven novels, from Sorcerer's Stone to Deathly Hallows."},
+{q:"Number of colors in a rainbow",a:7,why:"Red, orange, yellow, green, blue, indigo, and violet."},
+{q:"Number of dwarfs in Snow White and the Seven Dwarfs",a:7,why:"Doc, Grumpy, Happy, Sleepy, Bashful, Sneezy, and Dopey."},
+{q:"Number of Jurassic Park and Jurassic World films, including 2025's Rebirth",a:7,why:"Three Jurassic Park films, three Jurassic World films, and Rebirth."},
+{q:"Number of Wonders of the Ancient World",a:7,why:"The classic list of seven, from the Great Pyramid to the Lighthouse of Alexandria."},
+{q:"Number of different notes in a major scale",a:7,why:"Do, re, mi, fa, sol, la, ti, before do repeats."},
+{q:"Number of players each water polo team has in the water",a:7,why:"Six field players plus a goalkeeper."},
+{q:"Number of vertebrae in the human neck",a:7,why:"Seven cervical vertebrae, the same number a giraffe has."},
+{q:"Number of deadly sins",a:7,why:"Pride, greed, lust, envy, gluttony, wrath, and sloth."},
+{q:"Number of hills that ancient Rome was built on",a:7,why:"The famous Seven Hills of Rome."},
+{q:"Number of seasons of Parks and Recreation",a:7,why:"Seven seasons, 2009 to 2015."},
+{q:"Number of seasons of Mad Men",a:7,why:"Seven seasons, 2007 to 2015."},
+{q:"Number of seasons in the original run of Gilmore Girls",a:7,why:"Seven seasons, 2000 to 2007, before the Netflix revival."},
+{q:"Number of Super Bowls won by Tom Brady",a:7,why:"Six with the Patriots and one with the Buccaneers."},
+{q:"Number of novels in The Chronicles of Narnia",a:7,why:"Seven books, from The Lion, the Witch and the Wardrobe to The Last Battle."},
+{q:"Number of Oscars won by Oppenheimer",a:7,why:"Seven wins at the 2024 ceremony, including Best Picture."},
+{q:"Number of countries in Central America",a:7,why:"Belize, Guatemala, El Salvador, Honduras, Nicaragua, Costa Rica, and Panama."},
+{q:"Number of emirates in the United Arab Emirates",a:7,why:"Abu Dhabi, Dubai, Sharjah, Ajman, Umm Al Quwain, Ras Al Khaimah, and Fujairah."},
+// value 8
+{q:"Number of legs on a spider",a:8,why:"Eight legs, which separates spiders from insects."},
+{q:"Number of arms on an octopus",a:8,why:"Eight arms, no tentacles."},
+{q:"Number of planets in our solar system",a:8,why:"Eight, since Pluto was reclassified in 2006."},
+{q:"Number of Harry Potter films",a:8,why:"Seven books became eight films, because Deathly Hallows was split in two."},
+{q:"Number of bits in a byte",a:8,why:"Eight bits make one byte."},
+{q:"Number of reindeer pulling Santa's sleigh in the poem A Visit from St. Nicholas",a:8,why:"Dasher through Blitzen. Rudolph came along much later."},
+{q:"Number of furlongs in a mile",a:8,why:"A furlong is one eighth of a mile."},
+{q:"Number of pints in a U.S. gallon",a:8,why:"Four quarts, each of two pints."},
+{q:"Number of seasons of Brooklyn Nine-Nine",a:8,why:"Eight seasons, 2013 to 2021."},
+{q:"Number of pawns each player starts with in chess",a:8,why:"Eight pawns per side."},
+{q:"Number of Olympic gold medals won by Usain Bolt",a:8,why:"Eight, after one relay medal was stripped over a teammate's doping case."},
+{q:"Number of gold medals Michael Phelps won at the 2008 Beijing Olympics",a:8,why:"Eight golds in a single Games, still the record."},
+{q:"Number of countries that share a land border with mainland France",a:8,why:"Belgium, Luxembourg, Germany, Switzerland, Italy, Monaco, Spain, and Andorra."},
+{q:"Number of U.S. states that share a border with Tennessee",a:8,why:"Tied with Missouri for the most neighbors of any state."},
+{q:"Number of seasons of Full House",a:8,why:"Eight seasons, 1987 to 1995."},
+{q:"Number of U.S. states whose names begin with the letter M",a:8,why:"Maine, Maryland, Massachusetts, Michigan, Minnesota, Mississippi, Missouri, and Montana."},
+{q:"Number of U.S. states whose names begin with the letter N",a:8,why:"Nebraska, Nevada, and the six that start with New or North."},
+// value 9
+{q:"Number of countries that share a land border with Germany",a:9,why:"Denmark, Poland, Czechia, Austria, Switzerland, France, Luxembourg, Belgium, and the Netherlands."},
+{q:"Number of films in the Star Wars Skywalker saga",a:9,why:"Three trilogies: episodes I through IX."},
+{q:"Number of justices on the U.S. Supreme Court",a:9,why:"Nine, a number fixed by law since 1869."},
+{q:"Number of innings in a regulation baseball game",a:9,why:"Nine innings, unless it goes to extras."},
+{q:"Number of players a baseball team has on the field at once",a:9,why:"Pitcher, catcher, four infielders, and three outfielders."},
+{q:"Number of lives a cat has, according to the old saying",a:9,why:"Nine lives, so the saying goes."},
+{q:"Number of seasons of The Office (U.S.)",a:9,why:"Nine seasons, 2005 to 2013."},
+{q:"Number of seasons of Seinfeld",a:9,why:"Nine seasons, 1989 to 1998."},
+{q:"Number of seasons of How I Met Your Mother",a:9,why:"Nine seasons, 2005 to 2014."},
+{q:"Number of squares along one side of a Sudoku grid",a:9,why:"A nine by nine grid of 81 squares."},
+{q:"Number of symphonies Beethoven completed",a:9,why:"Nine, ending with the Ode to Joy."},
+{q:"Number of members in the Fellowship of the Ring",a:9,why:"Four hobbits, two men, an elf, a dwarf, and a wizard."},
+{q:"Number of Muses in Greek mythology",a:9,why:"Nine daughters of Zeus, one for each art."},
+{q:"Number of circles of Hell in Dante's Inferno",a:9,why:"Nine circles, descending to the frozen center."},
+{q:"Number of Oscars won by The Last Emperor",a:9,why:"Nine wins from nine nominations in 1988."},
+{q:"Number of letters in the word Tennessee",a:9,why:"T-e-n-n-e-s-s-e-e."},
+// value 10
+{q:"Number of arms and tentacles on a squid, counted together",a:10,why:"Eight arms plus two longer feeding tentacles."},
+{q:"Number of events in a decathlon",a:10,why:"Ten track and field events over two days."},
+{q:"Number of provinces in Canada",a:10,why:"Ten provinces plus three territories."},
+{q:"Number of pins set up in ten-pin bowling",a:10,why:"Ten pins in a triangle."},
+{q:"House number of the British Prime Minister's official residence on Downing Street",a:10,why:"10 Downing Street."},
+{q:"Number of seasons of Friends",a:10,why:"Ten seasons, 1994 to 2004."},
+{q:"Number of lords a-leaping in The Twelve Days of Christmas",a:10,why:"Ten lords a-leaping on the tenth day."},
+{q:"Number of amendments in the U.S. Bill of Rights",a:10,why:"The first ten amendments to the Constitution."},
+{q:"Number of letters in the word Starkville",a:10,why:"S-t-a-r-k-v-i-l-l-e."},
+{q:"Number of main Fast & Furious films, from The Fast and the Furious through Fast X",a:10,why:"Ten numbered films, not counting the Hobbs & Shaw spin-off."}
+];
+const BANK2 = [
+// value 0
+{q:"Number of letters of the alphabet missing from the sentence 'The quick brown fox jumps over the lazy dog'",a:0,why:"It is a pangram. Every letter appears at least once."},
+{q:"Number of Nobel Prizes awarded for mathematics",a:0,why:"There is no Nobel Prize in mathematics. The Fields Medal fills that role."},
+{q:"Number of Oscars won by Glenn Close",a:0,why:"Eight nominations and no wins, the most of any living actor."},
+{q:"Number of Super Bowls won by the Minnesota Vikings",a:0,why:"Four trips to the Super Bowl, four losses."},
+{q:"Number of U.S. states whose names begin with the letter B",a:0,why:"No state starts with B. None start with E, Q, X, Y, or Z either."},
+{q:"Number of U.S. states that share a border with Hawaii",a:0,why:"Hawaii is the only state that touches no other state and no other country."},
+{q:"Number of World Series titles won by the Seattle Mariners",a:0,why:"The Mariners have never even reached a World Series."},
+{q:"Number of Stanley Cups won by the Toronto Maple Leafs since 1967",a:0,why:"Their last Cup came in 1967, the longest drought in the NHL."},
+{q:"Number of countries that share a land border with Japan",a:0,why:"Japan is an island nation with no land neighbors."},
+{q:"Number of bones in an elephant's trunk",a:0,why:"The trunk is all muscle, around 40,000 of them."},
+// value 1
+{q:"Number of Oscars won by Al Pacino",a:1,why:"Best Actor for Scent of a Woman in 1993, on his eighth nomination."},
+{q:"Number of U.S. states that share a border with exactly one other state",a:1,why:"Maine, which touches only New Hampshire."},
+{q:"Number of Super Bowls won by the Chicago Bears",a:1,why:"Super Bowl XX, after the 1985 season."},
+{q:"Number of Super Bowls won by the New York Jets",a:1,why:"Super Bowl III in 1969, the one Joe Namath guaranteed."},
+{q:"Number of U.S. presidents who never married",a:1,why:"James Buchanan is the only lifelong bachelor to hold the office."},
+{q:"Number of U.S. states whose names contain the letter Z",a:1,why:"Arizona is the only one."},
+{q:"Number of U.S. states whose names contain the letter J",a:1,why:"New Jersey is the only one."},
+{q:"Number of U.S. states whose names begin with the word West",a:1,why:"West Virginia. There is no West Dakota or West Carolina."},
+{q:"Number of countries whose names begin with the letter Y",a:1,why:"Yemen is the only one."},
+{q:"Number of countries whose names begin with the letter Q",a:1,why:"Qatar is the only one."},
+{q:"Number of Oscars won by Jennifer Lawrence",a:1,why:"Best Actress for Silver Linings Playbook in 2013."},
+{q:"Number of acting Oscars won by Brad Pitt",a:1,why:"Best Supporting Actor for Once Upon a Time in Hollywood. He has a second Oscar as a producer."},
+{q:"Number of pairs of wings on a housefly",a:1,why:"Flies have one pair. The second pair evolved into tiny balance organs."},
+{q:"Number of consonants in the word queue",a:1,why:"Just the Q. The other four letters are vowels."},
+{q:"Number of World Series titles won by the Texas Rangers",a:1,why:"Their first and only title came in 2023."},
+{q:"Number of countries that share a land border with the United Kingdom",a:1,why:"Ireland, along the Northern Ireland border."},
+// value 2
+{q:"Number of Super Bowls won by the Tampa Bay Buccaneers",a:2,why:"Super Bowls XXXVII and LV."},
+{q:"Number of Oscars won by Denzel Washington",a:2,why:"Glory (supporting) and Training Day (lead)."},
+{q:"Number of Oscars won by Tom Hanks",a:2,why:"Back-to-back Best Actor wins for Philadelphia and Forrest Gump."},
+{q:"Number of countries whose names begin with the letter Z",a:2,why:"Zambia and Zimbabwe."},
+{q:"Number of U.S. senators each state has",a:2,why:"Two per state, for 100 in all."},
+{q:"Number of Super Bowls won by the Baltimore Ravens",a:2,why:"Super Bowls XXXV and XLVII."},
+{q:"Number of Super Bowls won by the Rams franchise",a:2,why:"One in St. Louis (XXXIV) and one in Los Angeles (LVI)."},
+{q:"Number of men's World Cup titles won by France",a:2,why:"1998 at home and 2018 in Russia."},
+{q:"Number of times Los Angeles has hosted the Summer Olympics before 2028",a:2,why:"1932 and 1984."},
+{q:"Number of colors on the flag of Japan",a:2,why:"A red disc on a white field."},
+{q:"Number of Inside Out films",a:2,why:"Inside Out (2015) and Inside Out 2 (2024)."},
+{q:"Number of Moana films",a:2,why:"Moana (2016) and Moana 2 (2024)."},
+{q:"Number of films in The Incredibles series",a:2,why:"The Incredibles (2004) and Incredibles 2 (2018)."},
+{q:"Number of Super Bowls won by the Philadelphia Eagles",a:2,why:"Super Bowls LII and LIX."},
+{q:"Number of U.S. states that share a border with Florida",a:2,why:"Georgia and Alabama."},
+{q:"Number of seasons of Fleabag",a:2,why:"Two short seasons, 2016 and 2019."},
+{q:"Number of World Series titles won by the Houston Astros",a:2,why:"2017 and 2022."},
+{q:"Number of Stanley Cups won by the Florida Panthers",a:2,why:"Back-to-back in 2024 and 2025."},
+{q:"Number of countries that share a land border with Mongolia",a:2,why:"Russia to the north and China to the south."},
+// value 3
+{q:"Number of men's World Cup titles won by Argentina",a:3,why:"1978, 1986, and 2022."},
+{q:"Number of Oscars won by Jack Nicholson",a:3,why:"One Flew Over the Cuckoo's Nest, Terms of Endearment, and As Good as It Gets."},
+{q:"Number of Oscars won by Daniel Day-Lewis",a:3,why:"My Left Foot, There Will Be Blood, and Lincoln. A record for Best Actor."},
+{q:"Number of gold medals Simone Biles won at the 2024 Paris Olympics",a:3,why:"Team, all-around, and vault, plus a silver on floor."},
+{q:"Number of countries whose names begin with the letter J",a:3,why:"Jamaica, Japan, and Jordan."},
+{q:"Number of vertical stripes on the flag of Italy",a:3,why:"Green, white, and red."},
+{q:"Number of Paddington films",a:3,why:"Paddington (2014), Paddington 2 (2017), and Paddington in Peru (2024)."},
+{q:"Number of Avatar films released by the end of 2025",a:3,why:"Avatar (2009), The Way of Water (2022), and Fire and Ash (2025)."},
+{q:"Number of Cars films from Pixar",a:3,why:"Cars (2006), Cars 2 (2011), and Cars 3 (2017)."},
+{q:"Number of sides on a yield sign",a:3,why:"It is an upside-down triangle."},
+{q:"Number of Super Bowls won by the Raiders",a:3,why:"XI and XVIII in Oakland and Los Angeles, plus XV."},
+{q:"Number of primary colors of light",a:3,why:"Red, green, and blue, which is why screens use RGB."},
+{q:"Number of ghosts that visit Scrooge in A Christmas Carol, not counting Marley",a:3,why:"Christmas Past, Christmas Present, and Christmas Yet to Come."},
+{q:"Number of wishes a genie traditionally grants",a:3,why:"Three wishes, and no wishing for more wishes."},
+{q:"Number of periods in a regulation hockey game",a:3,why:"Three periods of 20 minutes each."},
+{q:"Number of points for a field goal in American football",a:3,why:"Three points for a kick through the uprights."},
+{q:"Number of teaspoons in a tablespoon",a:3,why:"Three teaspoons make one tablespoon."},
+{q:"Number of U.S. states that share a border with California",a:3,why:"Oregon, Nevada, and Arizona."},
+{q:"Number of seasons of Squid Game",a:3,why:"Three seasons, with the finale released in 2025."},
+{q:"Number of World Series titles won by the Giants since moving to San Francisco",a:3,why:"2010, 2012, and 2014."},
+{q:"Number of Stanley Cups won by the Tampa Bay Lightning",a:3,why:"2004, 2020, and 2021."},
+{q:"Number of countries that share a land border with Norway",a:3,why:"Sweden, Finland, and Russia."},
+// value 4
+{q:"Number of letters in the shortest U.S. state names",a:4,why:"Ohio, Iowa, and Utah each have four letters."},
+{q:"Number of syllables in the word Alabama",a:4,why:"Al-a-bam-a."},
+{q:"Number of stars on the flag of New Zealand",a:4,why:"Four red stars of the Southern Cross."},
+{q:"Number of Despicable Me films, not counting the Minions spin-offs",a:4,why:"2010, 2013, 2017, and 2024."},
+{q:"Number of Toy Story films released before 2026",a:4,why:"1995, 1999, 2010, and 2019. Toy Story 5 arrived in 2026."},
+{q:"Number of Kung Fu Panda films",a:4,why:"2008, 2011, 2016, and 2024."},
+{q:"Number of Super Bowls won by the Kansas City Chiefs",a:4,why:"Super Bowls IV, LIV, LVII, and LVIII."},
+{q:"Number of Super Bowls won by the New York Giants",a:4,why:"XXI, XXV, XLII, and XLVI."},
+{q:"Number of times the United States has hosted the Winter Olympics",a:4,why:"Lake Placid twice, Squaw Valley, and Salt Lake City."},
+{q:"Number of U.S. states that share a border with Texas",a:4,why:"New Mexico, Oklahoma, Arkansas, and Louisiana."},
+{q:"Number of U.S. states that share a border with Alabama",a:4,why:"Tennessee, Georgia, Florida, and Mississippi."},
+{q:"Number of bases on a baseball diamond, counting home plate",a:4,why:"First, second, third, and home."},
+{q:"Number of leaves on a lucky clover",a:4,why:"A four-leaf clover is the lucky one."},
+{q:"Number of runners on a relay team",a:4,why:"Four legs, four runners."},
+{q:"Number of movements in a typical classical symphony",a:4,why:"Four movements is the standard form."},
+{q:"Number of Gospels in the New Testament",a:4,why:"Matthew, Mark, Luke, and John."},
+{q:"Number of seasons of Succession",a:4,why:"Four seasons, 2018 to 2023."},
+{q:"Number of years between leap years",a:4,why:"Every four years, with a few century exceptions."},
+{q:"Number of months that have exactly 30 days",a:4,why:"April, June, September, and November."},
+{q:"Number of NBA championships won by LeBron James",a:4,why:"Two with Miami, one with Cleveland, one with the Lakers."},
+{q:"Number of World Series titles won by the Boston Red Sox since 2000",a:4,why:"2004, 2007, 2013, and 2018."},
+{q:"Number of Jaws films",a:4,why:"Jaws, Jaws 2, Jaws 3-D, and Jaws: The Revenge."},
+{q:"Number of countries that share a land border with Belgium",a:4,why:"France, Luxembourg, Germany, and the Netherlands."},
+// value 5
+{q:"Number of eyes on a honeybee",a:5,why:"Two big compound eyes plus three tiny simple eyes on top of the head."},
+{q:"Number of syllables in the word Louisiana",a:5,why:"Lou-i-si-an-a."},
+{q:"Number of stars on the flag of China",a:5,why:"One large star and four smaller ones."},
+{q:"Number of Super Bowls won by the San Francisco 49ers",a:5,why:"XVI, XIX, XXIII, XXIV, and XXIX."},
+{q:"Number of U.S. states that share a border with Georgia",a:5,why:"Florida, Alabama, Tennessee, North Carolina, and South Carolina."},
+{q:"Number of U.S. states that share a border with New York",a:5,why:"New Jersey, Pennsylvania, Connecticut, Massachusetts, and Vermont."},
+{q:"Number of U.S. states that share a border with Nevada",a:5,why:"Oregon, Idaho, Utah, Arizona, and California."},
+{q:"Number of seasons of Stranger Things",a:5,why:"Five seasons, ending with the finale that closed out 2025."},
+{q:"Number of seasons of Breaking Bad",a:5,why:"Five seasons, 2008 to 2013."},
+{q:"Number of vowels in the word education",a:5,why:"E, u, a, i, and o. One of each except for a repeat."},
+{q:"Number of books in Percy Jackson and the Olympians",a:5,why:"From The Lightning Thief to The Last Olympian."},
+{q:"Number of Die Hard films",a:5,why:"Five films between 1988 and 2013."},
+{q:"Number of Ice Age films",a:5,why:"Five films between 2002 and 2016."},
+{q:"Number of Grand Slam singles titles won by Maria Sharapova",a:5,why:"Five majors, including a career Grand Slam."},
+{q:"Number of Masters tournaments won by Tiger Woods",a:5,why:"1997, 2001, 2002, 2005, and 2019."},
+{q:"Number of Ballon d'Or awards won by Cristiano Ronaldo",a:5,why:"2008, 2013, 2014, 2016, and 2017."},
+{q:"Number of NBA championships won by Kobe Bryant",a:5,why:"Three with Shaq, two with Pau Gasol, all with the Lakers."},
+{q:"Number of Stanley Cups won by the Pittsburgh Penguins",a:5,why:"1991, 1992, 2009, 2016, and 2017."},
+{q:"Number of World Series titles won by the New York Yankees since 1990",a:5,why:"1996, 1998, 1999, 2000, and 2009."},
+{q:"Number of NBA championships won by the Boston Celtics since 1980",a:5,why:"1981, 1984, 1986, 2008, and 2024."},
+{q:"Number of countries that share a land border with Switzerland",a:5,why:"Germany, France, Italy, Austria, and Liechtenstein."},
+// value 6
+{q:"Number of stars on the flag of Australia",a:6,why:"Five stars of the Southern Cross plus the large Commonwealth Star."},
+{q:"Number of U.S. states that share a border with Arkansas",a:6,why:"Missouri, Tennessee, Mississippi, Louisiana, Texas, and Oklahoma."},
+{q:"Number of U.S. states that share a border with Oklahoma",a:6,why:"Kansas, Missouri, Arkansas, Texas, New Mexico, and Colorado."},
+{q:"Number of U.S. states that share a border with Pennsylvania",a:6,why:"New York, New Jersey, Delaware, Maryland, West Virginia, and Ohio."},
+{q:"Number of seasons of The Crown",a:6,why:"Six seasons, 2016 to 2023."},
+{q:"Number of seasons of The Sopranos",a:6,why:"Six seasons, 1999 to 2007."},
+{q:"Number of seasons of Lost",a:6,why:"Six seasons, 2004 to 2010."},
+{q:"Number of seasons of Sex and the City",a:6,why:"Six seasons, 1998 to 2004, before the films."},
+{q:"Number of Rocky films, not counting the Creed series",a:6,why:"Rocky through Rocky V, plus Rocky Balboa."},
+{q:"Number of Terminator films",a:6,why:"Six films between 1984 and 2019."},
+{q:"Number of Stanley Cups won by the Chicago Blackhawks",a:6,why:"Three early ones and three more in 2010, 2013, and 2015."},
+{q:"Number of zeros in one million",a:6,why:"1,000,000."},
+{q:"Number of players each hockey team has on the ice, including the goalie",a:6,why:"Three forwards, two defensemen, and a goalie."},
+{q:"Number of balls bowled in one over in cricket",a:6,why:"Six legal deliveries make an over."},
+{q:"Number of states in Australia",a:6,why:"Six states plus two mainland territories."},
+{q:"Number of Oscars won by Dune (2021)",a:6,why:"Six technical awards, including Score and Cinematography."},
+{q:"Number of Oscars won by Mad Max: Fury Road",a:6,why:"Six wins, the most of any film that year."},
+{q:"Number of geese a-laying in The Twelve Days of Christmas",a:6,why:"Six geese a-laying on the sixth day."},
+{q:"Number of countries that share a land border with Italy",a:6,why:"France, Switzerland, Austria, Slovenia, San Marino, and Vatican City."},
+// value 7
+{q:"Number of U.S. states that share a border with Kentucky",a:7,why:"Illinois, Indiana, Ohio, West Virginia, Virginia, Tennessee, and Missouri."},
+{q:"Number of seasons of 30 Rock",a:7,why:"Seven seasons, 2006 to 2013."},
+{q:"Number of seasons of Boy Meets World",a:7,why:"Seven seasons, 1993 to 2000."},
+{q:"Number of seasons of The West Wing",a:7,why:"Seven seasons, 1999 to 2006."},
+{q:"Number of seasons of Buffy the Vampire Slayer",a:7,why:"Seven seasons, 1997 to 2003."},
+{q:"Number of seasons of Star Trek: The Next Generation",a:7,why:"Seven seasons, 1987 to 1994."},
+{q:"Number of seasons of New Girl",a:7,why:"Seven seasons, 2011 to 2018."},
+{q:"Number of live-action Transformers films",a:7,why:"Five main films plus Bumblebee and Rise of the Beasts."},
+{q:"Number of Wimbledon singles titles won by Serena Williams",a:7,why:"Seven, between 2002 and 2016."},
+{q:"Number of Wimbledon singles titles won by Novak Djokovic",a:7,why:"Seven, between 2011 and 2022."},
+{q:"Number of swans a-swimming in The Twelve Days of Christmas",a:7,why:"Seven swans a-swimming on the seventh day."},
+{q:"Number of letters in the word Jackson",a:7,why:"J-a-c-k-s-o-n, the capital of Mississippi."},
+{q:"Number of players on a netball team on the court",a:7,why:"Seven per side, each limited to certain zones."},
+{q:"Number of players per side in rugby sevens",a:7,why:"Seven, as the name says, on a full-size pitch."},
+{q:"Number of Oscars won by Shakespeare in Love",a:7,why:"Seven wins in 1999, including Best Picture."},
+{q:"Number of Oscars won by Gravity",a:7,why:"Seven wins in 2014, including Best Director."},
+{q:"Number of Oscars won by Schindler's List",a:7,why:"Seven wins in 1994, including Best Picture and Best Director."},
+{q:"Number of Weasley children in Harry Potter",a:7,why:"Bill, Charlie, Percy, Fred, George, Ron, and Ginny."},
+{q:"Number of Olympic gold medals won by Simone Biles through 2024",a:7,why:"Four in Rio and three in Paris."},
+{q:"Number of events in a heptathlon",a:7,why:"Seven events over two days."},
+{q:"Number of countries that share a land border with Poland",a:7,why:"Germany, Czechia, Slovakia, Ukraine, Belarus, Lithuania, and Russia."},
+// value 8
+{q:"Number of U.S. states that share a border with Missouri",a:8,why:"Tied with Tennessee for the most neighbors of any state."},
+{q:"Number of seasons of Desperate Housewives",a:8,why:"Eight seasons, 2004 to 2012."},
+{q:"Number of seasons in the original run of Dexter",a:8,why:"Eight seasons, 2006 to 2013."},
+{q:"Number of seasons of House",a:8,why:"Eight seasons, 2004 to 2012."},
+{q:"Number of seasons of That '70s Show",a:8,why:"Eight seasons, 1998 to 2006."},
+{q:"Number of Mission: Impossible films",a:8,why:"Eight films from 1996 to The Final Reckoning in 2025."},
+{q:"Number of Ballon d'Or awards won by Lionel Messi",a:8,why:"Eight, the record."},
+{q:"Number of Wimbledon singles titles won by Roger Federer",a:8,why:"Eight, the men's record."},
+{q:"Number of maids a-milking in The Twelve Days of Christmas",a:8,why:"Eight maids a-milking on the eighth day."},
+{q:"Number of letters in the word Illinois",a:8,why:"I-l-l-i-n-o-i-s."},
+{q:"Number of letters in the word Kentucky",a:8,why:"K-e-n-t-u-c-k-y."},
+{q:"Number of legs on a scorpion",a:8,why:"Eight legs. Scorpions are arachnids, like spiders."},
+{q:"Number of Oscars won by Slumdog Millionaire",a:8,why:"Eight wins in 2009, including Best Picture."},
+{q:"Number of Oscars won by Amadeus",a:8,why:"Eight wins in 1985, including Best Picture."},
+{q:"Number of fluid ounces in a cup",a:8,why:"Eight fluid ounces make a U.S. cup."},
+{q:"Number of Grand Slam singles titles won by Andre Agassi",a:8,why:"Eight majors, with at least one of each."},
+{q:"Number of U.S. states that touch at least one of the Great Lakes",a:8,why:"Minnesota, Wisconsin, Illinois, Indiana, Michigan, Ohio, Pennsylvania, and New York."},
+{q:"Number of countries that share a land border with Turkey",a:8,why:"Greece, Bulgaria, Georgia, Armenia, Azerbaijan, Iran, Iraq, and Syria."},
+// value 9
+{q:"Number of seasons in the original run of Scrubs",a:9,why:"Nine seasons, 2001 to 2010."},
+{q:"Number of seasons of Suits",a:9,why:"Nine seasons, 2011 to 2019."},
+{q:"Number of seasons in the original run of The X-Files",a:9,why:"Nine seasons, 1993 to 2002, before the revival."},
+{q:"Number of ladies dancing in The Twelve Days of Christmas",a:9,why:"Nine ladies dancing on the ninth day."},
+{q:"Number of letters in the word Louisiana",a:9,why:"L-o-u-i-s-i-a-n-a."},
+{q:"Number of letters in the word Wisconsin",a:9,why:"W-i-s-c-o-n-s-i-n."},
+{q:"Number of letters in the word Minnesota",a:9,why:"M-i-n-n-e-s-o-t-a."},
+{q:"Number of Oscars won by The English Patient",a:9,why:"Nine wins in 1997, including Best Picture."},
+{q:"Number of squares on a tic-tac-toe board",a:9,why:"A three-by-three grid."},
+{q:"Number of digits in a U.S. Social Security number",a:9,why:"Three, two, and four digits."},
+{q:"Number of planets in the solar system before Pluto was reclassified in 2006",a:9,why:"Pluto made nine until it became a dwarf planet."},
+{q:"Number of Ringwraiths in The Lord of the Rings",a:9,why:"Nine Nazgûl, one for each ring given to men."},
+{q:"Number of Grand Slam singles titles won by Monica Seles",a:9,why:"Nine majors, eight of them before age 20."},
+{q:"Number of Olympic gold medals won by Carl Lewis",a:9,why:"Nine golds across four Olympics."},
+{q:"Number of Olympic gold medals won by Mark Spitz",a:9,why:"Two in 1968 and seven in 1972."},
+{q:"Number of Olympic gold medals won by Katie Ledecky through 2024",a:9,why:"Nine golds across four Olympics, a record for a female swimmer."},
+// value 10
+{q:"Number of seasons of Smallville",a:10,why:"Ten seasons, 2001 to 2011."},
+{q:"Number of countries that share a land border with Brazil",a:10,why:"Every South American country except Chile and Ecuador, counting French Guiana as France."},
+{q:"Number of dimes in a dollar",a:10,why:"Ten dimes make a dollar."},
+{q:"Number of millimeters in a centimeter",a:10,why:"Ten millimeters per centimeter."},
+{q:"Number of outfield players per side in soccer, not counting the goalkeeper",a:10,why:"Eleven players minus the keeper."},
+{q:"Number of frames in a game of bowling",a:10,why:"Ten frames, with bonus balls in the tenth."},
+{q:"Number of films nominated for Best Picture at the Oscars each year since 2022",a:10,why:"The Academy fixed the field at ten nominees."},
+{q:"Number of seasons of The Blacklist",a:10,why:"Ten seasons, 2013 to 2023."},
+{q:"Number of U.S. states that touch the Mississippi River",a:10,why:"From Minnesota down to Louisiana, with Mississippi among them."},
+{q:"Number of legs on a lobster",a:10,why:"Ten legs, including the two big claws."}
+];
+
+BANK.push(...BANK2);
+const Engine = (() => {
+  function shuffle(arr, rnd) {
+    rnd = rnd || Math.random;
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+  function freshDeck(rnd) { return shuffle([...Array(BANK.length).keys()], rnd); }
+
+  function newState(names, mode, rnd) {
+    return {
+      v: 1, screen: 'handoff', mode: mode,
+      players: names.map(n => ({ name: n, points: 0 })),
+      deck: freshDeck(rnd), discard: [],
+      gameNo: 0, champion: null, tiebreak: null, game: null
+    };
+  }
+
+  function startGame(st, rnd) {
+    st.gameNo++;
+    const active = st.tiebreak ? st.tiebreak.slice() : st.players.map((_, i) => i);
+    const starter = active[(st.gameNo - 1) % active.length];
+    const hands = {};
+    for (const i of active) hands[i] = { cards: [], guesses: [], est: 0, stopped: false, stopOrder: null };
+    st.game = {
+      active, starter, current: starter, hands,
+      stopCount: 0, pending: null, passedFrom: null,
+      revealStep: 0, result: null, delta: null, instant: false,
+      lastAction: { type: 'start', who: st.players[starter].name, gameNo: st.gameNo, tiebreak: !!st.tiebreak }
+    };
+    st.screen = 'handoff';
+    drawIfNeeded(st, rnd);
+    return st;
+  }
+
+  function drawIfNeeded(st, rnd) {
+    const g = st.game;
+    if (g.pending !== null) return;
+    if (st.deck.length === 0) st.deck = shuffle(st.discard.splice(0), rnd);
+    if (st.deck.length === 0) st.deck = freshDeck(rnd);
+    g.pending = st.deck.pop();
+  }
+
+  const hand = (st, i) => st.game.hands[i];
+  const canStop = st => hand(st, st.game.current).cards.length >= 2;
+
+  function guess(st, v, rnd) {
+    const g = st.game, h = hand(st, g.current);
+    if (!Number.isInteger(v) || v < 0 || v > 10) return false;
+    h.cards.push(g.pending); h.guesses.push(v); h.est += v;
+    g.pending = null; g.passedFrom = null;
+    g.lastAction = { type: 'guess', who: st.players[g.current].name, v, est: h.est, cards: h.cards.length };
+    advance(st, rnd);
+    return true;
+  }
+
+  function stop(st, rnd) {
+    const g = st.game, h = hand(st, g.current);
+    if (!canStop(st)) return false;
+    h.stopped = true; h.stopOrder = ++g.stopCount;
+    g.passedFrom = st.players[g.current].name;
+    g.lastAction = { type: 'stop', who: st.players[g.current].name, est: h.est, cards: h.cards.length };
+    advance(st, rnd);
+    return true;
+  }
+
+  function advance(st, rnd) {
+    const g = st.game, n = g.active.length, pos = g.active.indexOf(g.current);
+    for (let k = 1; k <= n; k++) {
+      const cand = g.active[(pos + k) % n];
+      if (!g.hands[cand].stopped) {
+        g.current = cand; drawIfNeeded(st, rnd); st.screen = 'handoff'; return;
+      }
+    }
+    if (g.pending !== null) { st.deck.push(g.pending); g.pending = null; }
+    finish(st);
+  }
+
+  function finish(st) {
+    const g = st.game;
+    const order = g.active.slice().sort((a, b) => g.hands[a].stopOrder - g.hands[b].stopOrder);
+    const totals = {};
+    for (const i of g.active) totals[i] = g.hands[i].cards.reduce((s, c) => s + BANK[c].a, 0);
+    const safe = g.active.filter(i => totals[i] <= 21);
+    let best = -1; for (const i of safe) best = Math.max(best, totals[i]);
+    const winners = best < 0 ? [] : safe.filter(i => totals[i] === best);
+    const exact = g.active.filter(i => totals[i] === 21);
+    g.result = { order, totals, winners, best, exact };
+    for (const i of g.active) st.discard.push(...g.hands[i].cards);
+    if (st.mode === 'series') applySeries(st, winners, totals, exact);
+    g.revealStep = 0; st.screen = 'reveal';
+  }
+
+  function applySeries(st, winners, totals, exact) {
+    const g = st.game, isTB = !!st.tiebreak, delta = {};
+    if (!isTB) {
+      for (const i of g.active) { delta[i] = winners.includes(i) ? 2 : (totals[i] <= 21 ? 1 : 0); st.players[i].points += delta[i]; }
+    }
+    g.delta = delta;
+    if (exact.length === 1) { st.champion = exact[0]; g.instant = true; st.tiebreak = null; return; }
+    if (isTB) {
+      if (winners.length === 1) { st.champion = winners[0]; st.tiebreak = null; }
+      else if (winners.length > 1) st.tiebreak = winners;
+      return;
+    }
+    const pts = st.players.map(p => p.points), max = Math.max(...pts);
+    if (max >= 3) {
+      const top = pts.map((p, i) => p === max ? i : -1).filter(i => i >= 0);
+      if (top.length === 1) st.champion = top[0]; else st.tiebreak = top;
+    }
+  }
+
+  function revealNext(st) {
+    const g = st.game;
+    if (g.revealStep < g.result.order.length) g.revealStep++;
+    else st.screen = 'results';
+  }
+
+  function nextGame(st, rnd) {
+    if (st.mode === 'series' && st.champion !== null) return false;
+    startGame(st, rnd); return true;
+  }
+
+  function newSeries(st, rnd) {
+    for (const p of st.players) p.points = 0;
+    st.gameNo = 0; st.champion = null; st.tiebreak = null; st.game = null;
+    startGame(st, rnd); return st;
+  }
+
+  // A saved game may predate questions added later: shuffle any card it has never seen into its draw pile.
+  function topUp(st, rnd) {
+    const known = new Set([...st.deck, ...st.discard]);
+    if (st.game) {
+      if (st.game.pending !== null) known.add(st.game.pending);
+      for (const i of st.game.active) for (const c of st.game.hands[i].cards) known.add(c);
+    }
+    const missing = [];
+    for (let i = 0; i < BANK.length; i++) if (!known.has(i)) missing.push(i);
+    // drop any index that no longer exists (defensive, in case a question is ever removed)
+    st.deck = st.deck.filter(i => i < BANK.length); st.discard = st.discard.filter(i => i < BANK.length);
+    if (missing.length) st.deck = shuffle([...st.deck, ...missing], rnd);
+    return missing.length;
+  }
+
+  return { shuffle, newState, startGame, guess, stop, canStop, revealNext, nextGame, newSeries, hand, topUp };
+})();
+const $ = id => document.getElementById(id);
+const KEY = 'hunch21:v1', SKEY = 'hunch21:setup';
+let st = null;
+let setup = { count: 4, names: [], mode: 'single' };
+
+function load(k) { try { const s = localStorage.getItem(k); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function save() { try { if (st) localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) {} }
+function saveSetup() { try { localStorage.setItem(SKEY, JSON.stringify(setup)); } catch (e) {} }
+function clearSaved() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined && text !== null) e.textContent = text; return e; }
+function pill(kind, text) { return el('span', 'pill ' + kind, text); }
+function button(text, cls, fn) { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function listNames(a) { return a.length <= 1 ? (a[0] || '') : a.length === 2 ? `${a[0]} and ${a[1]}` : `${a.slice(0, -1).join(', ')}, and ${a[a.length - 1]}`; }
+function plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
+function announce(t) { const l = $('live'); l.textContent = ''; setTimeout(() => { l.textContent = t; }, 40); }
+function show(id) { for (const s of ['s-setup', 's-handoff', 's-turn', 's-reveal', 's-results']) $(s).hidden = s !== id; }
+function focusIn(id) { const h = $(id).querySelector('[tabindex="-1"]'); window.scrollTo({ top: 0 }); if (h) h.focus({ preventScroll: true }); }
+function setMeta() { $('meta').textContent = st ? (st.tiebreak && st.game && st.game.lastAction.tiebreak ? 'Tiebreaker' : `Game ${st.gameNo}`) : ''; }
+
+function render() {
+  save();
+  $('quitBox').hidden = !st;
+  if (!st) { renderSetup(); return; }
+  if (st.screen === 'handoff') renderHandoff();
+  else if (st.screen === 'turn') renderTurn();
+  else if (st.screen === 'reveal') renderReveal();
+  else if (st.screen === 'results') renderResults();
+  else renderSetup();
+}
+
+/* ---------- setup ---------- */
+function renderSetup() {
+  show('s-setup'); $('meta').textContent = '';
+  const saved = load(KEY);
+  const resumable = saved && saved.game && !(saved.screen === 'results' && (saved.mode === 'single' || saved.champion !== null));
+  $('resumeBox').hidden = !resumable;
+  if (resumable) $('resumeText').textContent = `${saved.players.map(p => p.name).join(', ')} · ${saved.mode === 'series' ? 'Series to 3 points' : 'One game'} · Game ${saved.gameNo}`;
+  $('countOut').value = setup.count;
+  $('minus').disabled = setup.count <= 2; $('plus').disabled = setup.count >= 6;
+  const box = $('names'); box.innerHTML = '';
+  for (let i = 0; i < setup.count; i++) {
+    const f = el('div', 'field'); const l = el('label', null, `Player ${i + 1}`); l.htmlFor = 'name' + i;
+    const inp = el('input'); inp.type = 'text'; inp.id = 'name' + i; inp.maxLength = 14; inp.autocomplete = 'off'; inp.placeholder = `Player ${i + 1}`; inp.value = setup.names[i] || '';
+    inp.addEventListener('input', () => { setup.names[i] = inp.value; saveSetup(); });
+    f.append(l, inp); box.append(f);
+  }
+  $('modeSingle').setAttribute('aria-pressed', setup.mode === 'single'); $('modeSeries').setAttribute('aria-pressed', setup.mode === 'series');
+  $('modeHelp').textContent = setup.mode === 'single' ? 'One round of guessing. Closest to 21 without going over takes it.' : 'Win a game for 2 points, finish at or under 21 for 1 point. First to 3 points wins the series, and exactly 21 wins it instantly.';
+}
+function startNew() {
+  const names = []; const seen = {};
+  for (let i = 0; i < setup.count; i++) {
+    let n = (setup.names[i] || '').trim() || `Player ${i + 1}`;
+    if (seen[n]) n = `${n} ${++seen[n]}`; else seen[n] = 1;
+    names.push(n);
+  }
+  st = Engine.newState(names, setup.mode); Engine.startGame(st); render();
+}
+
+/* ---------- hand-off ---------- */
+function renderHandoff() {
+  show('s-handoff'); setMeta();
+  const g = st.game, la = g.lastAction, name = st.players[g.current].name;
+  let t;
+  if (la.type === 'start') t = la.tiebreak ? `Tiebreaker game. ${la.who} goes first.` : `Game ${la.gameNo} of ${st.mode === 'series' ? 'the series' : 'Hunch 21'}. ${la.who} goes first.`;
+  else if (la.type === 'guess') t = `${la.who} guessed ${la.v}. Running total of guesses: ${la.est} from ${plural(la.cards, 'card')}.`;
+  else t = `${la.who} stopped at ${la.est} with ${plural(la.cards, 'card')}. The question passes along.`;
+  $('lastAction').textContent = t; $('handName').textContent = name;
+  $('handBtn').textContent = `I'm ${name}. Show me the question`;
+  focusIn('s-handoff'); announce(`${t} Pass the phone to ${name}.`);
+}
+
+/* ---------- turn ---------- */
+function renderTurn() {
+  show('s-turn'); setMeta();
+  const g = st.game, i = g.current, p = st.players[i], h = g.hands[i];
+  const strip = $('strip'); strip.innerHTML = '';
+  st.players.forEach((pl, idx) => {
+    const inGame = g.active.includes(idx), hh = g.hands[idx];
+    const c = el('div', 'chip' + (idx === i ? ' current' : '') + ((!inGame || hh.stopped) ? ' stopped' : ''));
+    c.append(el('div', 'name', pl.name), el('div', 'est num-tab', inGame ? String(hh.est) : '–'), el('div', 'sub', inGame ? plural(hh.cards.length, 'card') : 'sitting out'));
+    if (inGame && idx === i) c.append(pill('turn', 'Your turn')); else if (inGame && hh.stopped) c.append(pill('stop', 'Stopped'));
+    if (st.mode === 'series') c.append(pill('pts', plural(pl.points, 'pt')));
+    strip.append(c);
+  });
+  $('turnWho').textContent = `${p.name}, your guess`;
+  $('turnTally').innerHTML = `Guesses so far: <b class="num-tab">${h.est}</b> · ${plural(h.cards.length, 'card')}`;
+  const q = BANK[g.pending]; $('cardQ').textContent = q.q;
+  const note = $('cardNote');
+  if (g.passedFrom) { note.hidden = false; note.textContent = `${g.passedFrom} stopped, so this question comes to you.`; } else note.hidden = true;
+  const card = $('card'); card.classList.remove('flip'); void card.offsetWidth; card.classList.add('flip');
+  const pad = $('pad'); pad.innerHTML = '';
+  for (let v = 0; v <= 10; v++) {
+    const b = button(String(v), 'num num-tab', () => { if (Engine.guess(st, v)) render(); });
+    b.setAttribute('aria-label', `Guess ${v}`); pad.append(b);
+  }
+  const ok = Engine.canStop(st);
+  const s = button('Stop', 'num stopbtn', () => { if (Engine.stop(st)) render(); });
+  s.disabled = !ok; s.setAttribute('aria-label', ok ? `Stop here with ${h.est}` : 'Stop becomes available once you hold two cards');
+  pad.append(s);
+  $('padHint').textContent = ok ? `Guess this one, or stop here with ${h.est}.` : (h.cards.length === 0 ? 'Tap your guess. The real answer stays hidden until the end.' : 'Take this card too. You can stop from your third card on.');
+  focusIn('s-turn'); announce(`${p.name}: ${q.q}`);
+}
+
+/* ---------- reveal ---------- */
+function revealPanel(i) {
+  const g = st.game, r = g.result, h = g.hands[i], p = st.players[i], total = r.totals[i];
+  const sec = el('section', 'rev');
+  const head = el('header'); const h3 = el('h3', null, p.name); h3.tabIndex = -1;
+  head.append(h3, el('span', 'badge ' + (total > 21 ? 'bust' : total === 21 ? 'exact' : 'safe'), total > 21 ? 'Bust' : total === 21 ? 'Exactly 21!' : 'Safe'));
+  const ol = el('ol');
+  h.cards.forEach((c, k) => {
+    const q = BANK[c], li = el('li'), txt = el('div'); txt.style.minWidth = '0';
+    txt.append(el('div', null, q.q), el('div', 'why', q.why), el('div', 'small muted', `${p.name} guessed ${h.guesses[k]}`));
+    li.append(el('div', 'val num-tab', String(q.a)), txt); ol.append(li);
+  });
+  const tot = el('div', 'total num-tab'); tot.innerHTML = `Actual total ${total} <small>(guesses added up to ${h.est})</small>`;
+  sec.append(head, ol, tot); return sec;
+}
+function renderReveal() {
+  show('s-reveal'); setMeta();
+  const g = st.game, r = g.result, list = $('revealList'); list.innerHTML = '';
+  for (let k = 0; k < g.revealStep; k++) list.append(revealPanel(r.order[k]));
+  const btn = $('revealBtn');
+  btn.textContent = g.revealStep < r.order.length ? `Flip ${st.players[r.order[g.revealStep]].name}'s cards` : 'See the results';
+  btn.onclick = () => { Engine.revealNext(st); render(); };
+  if (g.revealStep === 0) focusIn('s-reveal');
+  else { const last = list.lastElementChild; last.querySelector('h3').focus({ preventScroll: true }); last.scrollIntoView({ block: 'start', behavior: 'smooth' }); announce(`${st.players[r.order[g.revealStep - 1]].name}: actual total ${r.totals[r.order[g.revealStep - 1]]}.`); }
+}
+
+/* ---------- results ---------- */
+function renderResults() {
+  show('s-results'); setMeta();
+  const g = st.game, r = g.result, series = st.mode === 'series';
+  const names = idx => idx.map(i => st.players[i].name);
+  const b = $('banner'); b.innerHTML = ''; b.tabIndex = -1;
+  let big, sub = '';
+  if (r.winners.length === 0) { big = 'Everybody went over 21.'; sub = 'Nobody wins this one.'; }
+  else if (r.winners.length === 1) big = `${st.players[r.winners[0]].name} wins with ${r.best}!`;
+  else { big = `${listNames(names(r.winners))} tie at ${r.best}.`; sub = 'Tied players share the win.'; }
+  if (series) {
+    if (st.champion !== null) sub = g.instant ? `Exactly 21 wins the series on the spot. ${st.players[st.champion].name} takes it!` : `${st.players[st.champion].name} wins the series!`;
+    else if (st.tiebreak) sub = `${listNames(names(st.tiebreak))} are tied at the top with ${st.players[st.tiebreak[0]].points} points. A tiebreaker game decides it.`;
+  }
+  b.append(el('div', 'big', big)); if (sub) b.append(el('div', null, sub));
+  const rank = i => { if (!g.active.includes(i)) return 99; const t = r.totals[i]; return t > 21 ? 50 + (t - 21) : 21 - t; };
+  const rows = st.players.map((p, i) => ({ i, p, inGame: g.active.includes(i) }));
+  rows.sort((a, c) => series ? ((c.p.points - a.p.points) || (rank(a.i) - rank(c.i))) : (rank(a.i) - rank(c.i)));
+  $('standingsTitle').textContent = series ? 'Series standings' : 'This game';
+  let body = '';
+  for (const { i, p, inGame } of rows) {
+    const tot = inGame ? r.totals[i] : null;
+    let res = !inGame ? 'Sat out' : tot > 21 ? 'Bust' : r.winners.includes(i) ? 'Winner' : 'Safe';
+    if (series && st.champion === i) res = 'Series winner';
+    const d = series && g.delta && g.delta[i] !== undefined ? ` (+${g.delta[i]})` : '';
+    body += `<tr class="${st.champion === i ? 'champ' : ''}"><td>${esc(p.name)}</td><td class="n">${inGame ? tot : '–'}</td><td>${res}</td>${series ? `<td class="n">${p.points}${d}</td>` : ''}</tr>`;
+  }
+  $('standings').innerHTML = `<thead><tr><th>Player</th><th class="n">Total</th><th>Result</th>${series ? '<th class="n">Points</th>' : ''}</tr></thead><tbody>${body}</tbody>`;
+  $('standingsNote').textContent = series ? 'Win a game for 2 points, finish at or under 21 for 1, go over for 0. First to 3 wins.' : 'Everyone can see the cards again on the reveal screen next game. Same players, new questions.';
+  const a = $('resultActions'); a.innerHTML = '';
+  if (series && st.champion === null) a.append(button(st.tiebreak ? 'Play the tiebreaker' : 'Next game', 'btn btn-accent', () => { Engine.nextGame(st); render(); }));
+  else if (series) a.append(button('New series, same players', 'btn btn-accent', () => { Engine.newSeries(st); render(); }));
+  else a.append(button('Play again, same players', 'btn btn-accent', () => { Engine.nextGame(st); render(); }));
+  a.append(button('Change players', 'btn', () => { st = null; clearSaved(); render(); }));
+  window.scrollTo({ top: 0 }); b.focus({ preventScroll: true });
+  announce(big + ' ' + sub);
+}
+
+/* ---------- wiring ---------- */
+$('minus').addEventListener('click', () => { if (setup.count > 2) { setup.count--; saveSetup(); renderSetup(); } });
+$('plus').addEventListener('click', () => { if (setup.count < 6) { setup.count++; saveSetup(); renderSetup(); } });
+$('modeSingle').addEventListener('click', () => { setup.mode = 'single'; saveSetup(); renderSetup(); });
+$('modeSeries').addEventListener('click', () => { setup.mode = 'series'; saveSetup(); renderSetup(); });
+$('startBtn').addEventListener('click', startNew);
+$('resumeBtn').addEventListener('click', () => { st = load(KEY); render(); });
+$('discardBtn').addEventListener('click', () => { clearSaved(); renderSetup(); });
+$('handBtn').addEventListener('click', () => { st.screen = 'turn'; render(); });
+$('rulesBtn').addEventListener('click', () => { resetQuit(); $('rules').showModal(); });
+$('rulesClose').addEventListener('click', () => $('rules').close());
+function resetQuit() {
+  const q = $('quitBox'); q.innerHTML = '';
+  q.append(button('End this game and go to setup', 'btn', () => {
+    q.innerHTML = '';
+    q.append(button('Yes, end it', 'btn btn-accent', () => { $('rules').close(); st = null; clearSaved(); render(); }), button('Keep playing', 'btn', resetQuit));
+  }));
+}
+function boot(data) {
+  setup = (data && data.setup) || load(SKEY) || { count: 4, names: [], mode: 'single' };
+  if (!Array.isArray(setup.names)) setup.names = [];
+  setup.count = Math.min(6, Math.max(2, Number(setup.count) || 4));
+  if (setup.mode !== 'series') setup.mode = 'single';
+  st = (data && data.state) || load(KEY);
+  if (!st || st.v !== 1 || !st.game) st = null;
+  if (st) { try { Engine.topUp(st); } catch (e) { st = null; } }
+  render();
+}
+if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ state: st, setup }));
+if (window.claude && window.claude.hot && window.claude.hot.ready) window.claude.hot.ready(boot); else boot((window.claude && window.claude.hot && window.claude.hot.data) || null);
+</script>
+<script>
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });
+}
+</script>
+</body>
+</html>
