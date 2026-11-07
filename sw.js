@@ -1,5 +1,5 @@
-// Hunch 21 offline cache. Build a2477df4
-const CACHE = 'hunch21-a2477df4';
+// Hunch 21 offline cache. Build fa8803a3
+const CACHE = 'hunch21-fa8803a3';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png', './apple-touch-icon.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
