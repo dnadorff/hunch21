@@ -1,12 +1,13 @@
-// Hunch 21 offline cache. Build fa8803a3
-const CACHE = 'hunch21-fa8803a3';
+// Hunch 21 offline cache. Build 72152520
+const CACHE = 'hunch21-72152520';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png', './apple-touch-icon.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
 });
 self.addEventListener('activate', function (e) {
   e.waitUntil(caches.keys().then(function (keys) {
-    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    // Only clear this game's own old caches. Other games share this web address and keep their own.
+    return Promise.all(keys.filter(function (k) { return k !== CACHE && /^hunch21-[0-9a-f]{8}$/.test(k); }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 self.addEventListener('fetch', function (e) {

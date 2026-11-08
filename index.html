@@ -169,6 +169,16 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
 .confirm{display:flex;gap:8px;flex-wrap:wrap}
 @media (prefers-reduced-motion: reduce){.card.flip{animation:none}.btn,.num{transition:none}}
 .sr{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+/* linked games */
+.lastline{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;font-size:.95rem}
+.codebig{font-family:var(--font-display);font-weight:800;font-size:2.6rem;letter-spacing:.08em;text-align:center;background:var(--card);color:var(--card-ink);border-radius:18px;padding:14px 10px;font-variant-numeric:tabular-nums}
+input.code{font-family:var(--font-display);font-weight:800;font-size:1.6rem;letter-spacing:.12em;text-align:center;text-transform:uppercase}
+.seats{margin:0;padding-left:24px;display:flex;flex-direction:column;gap:4px;font-weight:700}
+.check{font-size:.9rem;color:var(--muted);text-align:center}
+.check b{font-family:var(--font-display);font-size:1.1rem;color:var(--ink);letter-spacing:.06em}
+.msg{font-size:.95rem;font-weight:700}
+.msg.bad{color:var(--bad)}
+.msg.good{color:var(--good)}
 </style>
 </head>
 <body>
@@ -216,7 +226,21 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
       </div>
       <button class="btn btn-accent" id="startBtn" type="button">Deal the first card</button>
     </div>
-    <p class="muted small"><span id="bankCount">372</span> original questions, and no question repeats until the whole deck has been used. The phone keeps the answers hidden until the reveal. Works offline once installed. Build fa8803a3.</p>
+    <div class="panel stack">
+      <h3>Playing from different places?</h3>
+      <p class="muted small">Get on a phone or video call. A linked game deals the same questions on every phone. Each player says their guess out loud, and everyone taps it in on their own phone.</p>
+      <div class="row">
+        <button class="btn" id="hostBtn" type="button">Start a linked game</button>
+        <button class="btn" id="joinBtn" type="button">Join with a code</button>
+      </div>
+    </div>
+    <p class="muted small"><span id="bankCount">372</span> original questions, and no question repeats until the whole deck has been used. The phone keeps the answers hidden until the reveal. Works offline once installed. Build 72152520.</p>
+  </section>
+
+  <!-- LINKED GAME SETUP -->
+  <section id="s-link" class="stack" hidden>
+    <h2 id="linkTitle" tabindex="-1"></h2>
+    <div class="stack" id="linkBody"></div>
   </section>
 
   <!-- HAND-OFF -->
@@ -230,6 +254,7 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
   <!-- TURN -->
   <section id="s-turn" class="stack" hidden>
     <div class="strip" id="strip"></div>
+    <p class="lastline" id="linkLast" hidden></p>
     <div class="turnline">
       <h2 class="who" id="turnWho" tabindex="-1"></h2>
       <div class="tally num-tab" id="turnTally"></div>
@@ -241,6 +266,7 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
     </div>
     <p class="hint" id="padHint">Tap your guess. The real answer stays hidden until the end.</p>
     <div class="pad" id="pad" role="group" aria-label="Your guess, 0 to 10"></div>
+    <div class="stack" id="linkTools" hidden></div>
   </section>
 
   <!-- REVEAL -->
@@ -249,6 +275,7 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
     <p class="muted small">Cards flip in the order players stopped. First to stop goes first.</p>
     <div class="stack" id="revealList"></div>
     <button class="btn btn-primary" id="revealBtn" type="button">Flip the next player's cards</button>
+    <div class="stack" id="revealTools" hidden></div>
   </section>
 
   <!-- RESULTS -->
@@ -274,6 +301,7 @@ dialog::backdrop{background:rgba(10,14,22,.6)}
         <li><b>Closest to 21 without going over wins.</b> Ties share the win. If everyone goes over, nobody wins.</li>
         <li><b>Series to 3 points:</b> the winner of each game scores 2 points. Everyone else scores 1 point if they stayed at or under 21, and 0 if they went over. First to 3 points takes the series. If several players reach 3 points in the same game and are tied at the top, they play a tiebreaker game among themselves.</li>
         <li><b>Hitting exactly 21</b> in a series wins the whole series on the spot (if two players hit 21 in the same game, it counts as a shared game win instead).</li>
+        <li><b>Linked game on separate phones:</b> get on a phone or video call. One person taps Start a linked game and reads out the code. Everyone else taps Join with a code and types the player names in the same order. On each turn, the player says their guess or "stop" out loud, and everyone taps it in. The match check under the keypad should read the same on every phone. If it doesn't, someone tapped something different, so use Undo last tap until the checks match again.</li>
         <li><b>Card statistics:</b> the deck leans toward the middle. Answers of 3 to 7 are the most common, and the average card is worth about 5.</li>
       </ul>
       <div class="confirm" id="quitBox" hidden>
@@ -1046,14 +1074,15 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<':
 function listNames(a) { return a.length <= 1 ? (a[0] || '') : a.length === 2 ? `${a[0]} and ${a[1]}` : `${a.slice(0, -1).join(', ')}, and ${a[a.length - 1]}`; }
 function plural(n, w) { return `${n} ${w}${n === 1 ? '' : 's'}`; }
 function announce(t) { const l = $('live'); l.textContent = ''; setTimeout(() => { l.textContent = t; }, 40); }
-function show(id) { for (const s of ['s-setup', 's-handoff', 's-turn', 's-reveal', 's-results']) $(s).hidden = s !== id; }
+function show(id) { for (const s of ['s-setup', 's-link', 's-handoff', 's-turn', 's-reveal', 's-results']) $(s).hidden = s !== id; }
 function focusIn(id) { const h = $(id).querySelector('[tabindex="-1"]'); window.scrollTo({ top: 0 }); if (h) h.focus({ preventScroll: true }); }
 function setMeta() { $('meta').textContent = st ? (st.tiebreak && st.game && st.game.lastAction.tiebreak ? 'Tiebreaker' : `Game ${st.gameNo}`) : ''; }
 
 function render() {
   save();
   $('quitBox').hidden = !st;
-  if (!st) { renderSetup(); return; }
+  if (!st) { if (linkUI) renderLink(); else renderSetup(); return; }
+  if (st.link && st.screen === 'handoff') st.screen = 'turn'; // linked phones skip the pass-the-phone screen
   if (st.screen === 'handoff') renderHandoff();
   else if (st.screen === 'turn') renderTurn();
   else if (st.screen === 'reveal') renderReveal();
@@ -1064,10 +1093,11 @@ function render() {
 /* ---------- setup ---------- */
 function renderSetup() {
   show('s-setup'); $('meta').textContent = '';
+  $('bankCount').textContent = BANK.length;
   const saved = load(KEY);
   const resumable = saved && saved.game && !(saved.screen === 'results' && (saved.mode === 'single' || saved.champion !== null));
   $('resumeBox').hidden = !resumable;
-  if (resumable) $('resumeText').textContent = `${saved.players.map(p => p.name).join(', ')} · ${saved.mode === 'series' ? 'Series to 3 points' : 'One game'} · Game ${saved.gameNo}`;
+  if (resumable) $('resumeText').textContent = `${saved.players.map(p => p.name).join(', ')} · ${saved.mode === 'series' ? 'Series to 3 points' : 'One game'} · Game ${saved.gameNo}${saved.link ? ` · Linked game ${saved.link.code}` : ''}`;
   $('countOut').value = setup.count;
   $('minus').disabled = setup.count <= 2; $('plus').disabled = setup.count >= 6;
   const box = $('names'); box.innerHTML = '';
@@ -1080,24 +1110,29 @@ function renderSetup() {
   $('modeSingle').setAttribute('aria-pressed', setup.mode === 'single'); $('modeSeries').setAttribute('aria-pressed', setup.mode === 'series');
   $('modeHelp').textContent = setup.mode === 'single' ? 'One round of guessing. Closest to 21 without going over takes it.' : 'Win a game for 2 points, finish at or under 21 for 1 point. First to 3 points wins the series, and exactly 21 wins it instantly.';
 }
-function startNew() {
+function cleanNames(raw, count) {
   const names = []; const seen = {};
-  for (let i = 0; i < setup.count; i++) {
-    let n = (setup.names[i] || '').trim() || `Player ${i + 1}`;
+  for (let i = 0; i < count; i++) {
+    let n = (raw[i] || '').trim() || `Player ${i + 1}`;
     if (seen[n]) n = `${n} ${++seen[n]}`; else seen[n] = 1;
     names.push(n);
   }
-  st = Engine.newState(names, setup.mode); Engine.startGame(st); render();
+  return names;
+}
+function startNew() {
+  st = Engine.newState(cleanNames(setup.names, setup.count), setup.mode); Engine.startGame(st); render();
 }
 
 /* ---------- hand-off ---------- */
+function lastText() {
+  const la = st.game.lastAction;
+  if (la.type === 'start') return la.tiebreak ? `Tiebreaker game. ${la.who} goes first.` : `Game ${la.gameNo} of ${st.mode === 'series' ? 'the series' : 'Hunch 21'}. ${la.who} goes first.`;
+  if (la.type === 'guess') return `${la.who} guessed ${la.v}. Running total of guesses: ${la.est} from ${plural(la.cards, 'card')}.`;
+  return `${la.who} stopped at ${la.est} with ${plural(la.cards, 'card')}. The question passes along.`;
+}
 function renderHandoff() {
   show('s-handoff'); setMeta();
-  const g = st.game, la = g.lastAction, name = st.players[g.current].name;
-  let t;
-  if (la.type === 'start') t = la.tiebreak ? `Tiebreaker game. ${la.who} goes first.` : `Game ${la.gameNo} of ${st.mode === 'series' ? 'the series' : 'Hunch 21'}. ${la.who} goes first.`;
-  else if (la.type === 'guess') t = `${la.who} guessed ${la.v}. Running total of guesses: ${la.est} from ${plural(la.cards, 'card')}.`;
-  else t = `${la.who} stopped at ${la.est} with ${plural(la.cards, 'card')}. The question passes along.`;
+  const g = st.game, name = st.players[g.current].name, t = lastText();
   $('lastAction').textContent = t; $('handName').textContent = name;
   $('handBtn').textContent = `I'm ${name}. Show me the question`;
   focusIn('s-handoff'); announce(`${t} Pass the phone to ${name}.`);
@@ -1112,27 +1147,32 @@ function renderTurn() {
     const inGame = g.active.includes(idx), hh = g.hands[idx];
     const c = el('div', 'chip' + (idx === i ? ' current' : '') + ((!inGame || hh.stopped) ? ' stopped' : ''));
     c.append(el('div', 'name', pl.name), el('div', 'est num-tab', inGame ? String(hh.est) : '–'), el('div', 'sub', inGame ? plural(hh.cards.length, 'card') : 'sitting out'));
-    if (inGame && idx === i) c.append(pill('turn', 'Your turn')); else if (inGame && hh.stopped) c.append(pill('stop', 'Stopped'));
+    if (inGame && idx === i) c.append(pill('turn', st.link ? 'Up now' : 'Your turn')); else if (inGame && hh.stopped) c.append(pill('stop', 'Stopped'));
     if (st.mode === 'series') c.append(pill('pts', plural(pl.points, 'pt')));
     strip.append(c);
   });
-  $('turnWho').textContent = `${p.name}, your guess`;
+  const linked = !!st.link;
+  $('turnWho').textContent = linked ? `${p.name}'s turn` : `${p.name}, your guess`;
+  $('linkLast').hidden = !linked; if (linked) $('linkLast').textContent = lastText();
   $('turnTally').innerHTML = `Guesses so far: <b class="num-tab">${h.est}</b> · ${plural(h.cards.length, 'card')}`;
   const q = BANK[g.pending]; $('cardQ').textContent = q.q;
   const note = $('cardNote');
-  if (g.passedFrom) { note.hidden = false; note.textContent = `${g.passedFrom} stopped, so this question comes to you.`; } else note.hidden = true;
+  if (g.passedFrom) { note.hidden = false; note.textContent = linked ? `${g.passedFrom} stopped, so this question passes to ${p.name}.` : `${g.passedFrom} stopped, so this question comes to you.`; } else note.hidden = true;
   const card = $('card'); card.classList.remove('flip'); void card.offsetWidth; card.classList.add('flip');
   const pad = $('pad'); pad.innerHTML = '';
   for (let v = 0; v <= 10; v++) {
-    const b = button(String(v), 'num num-tab', () => { if (Engine.guess(st, v)) render(); });
-    b.setAttribute('aria-label', `Guess ${v}`); pad.append(b);
+    const b = button(String(v), 'num num-tab', () => move(() => Engine.guess(st, v, R())));
+    b.setAttribute('aria-label', linked ? `${p.name} guessed ${v}` : `Guess ${v}`); pad.append(b);
   }
   const ok = Engine.canStop(st);
-  const s = button('Stop', 'num stopbtn', () => { if (Engine.stop(st)) render(); });
-  s.disabled = !ok; s.setAttribute('aria-label', ok ? `Stop here with ${h.est}` : 'Stop becomes available once you hold two cards');
+  const s = button('Stop', 'num stopbtn', () => move(() => Engine.stop(st, R())));
+  s.disabled = !ok; s.setAttribute('aria-label', ok ? (linked ? `${p.name} stops at ${h.est}` : `Stop here with ${h.est}`) : 'Stop becomes available once you hold two cards');
+  $('pad').setAttribute('aria-label', linked ? `${p.name}'s guess, 0 to 10` : 'Your guess, 0 to 10');
   pad.append(s);
-  $('padHint').textContent = ok ? `Guess this one, or stop here with ${h.est}.` : (h.cards.length === 0 ? 'Tap your guess. The real answer stays hidden until the end.' : 'Take this card too. You can stop from your third card on.');
-  focusIn('s-turn'); announce(`${p.name}: ${q.q}`);
+  if (linked) $('padHint').textContent = ok ? `${p.name} says a guess or "stop" out loud, and everyone taps it in.` : `${p.name} says a guess out loud, and everyone taps it in. ${p.name} can stop from the third card on.`;
+  else $('padHint').textContent = ok ? `Guess this one, or stop here with ${h.est}.` : (h.cards.length === 0 ? 'Tap your guess. The real answer stays hidden until the end.' : 'Take this card too. You can stop from your third card on.');
+  linkTools($('linkTools'), true);
+  focusIn('s-turn'); announce(linked ? `${lastText()} ${p.name}'s turn: ${q.q}` : `${p.name}: ${q.q}`);
 }
 
 /* ---------- reveal ---------- */
@@ -1157,6 +1197,7 @@ function renderReveal() {
   const btn = $('revealBtn');
   btn.textContent = g.revealStep < r.order.length ? `Flip ${st.players[r.order[g.revealStep]].name}'s cards` : 'See the results';
   btn.onclick = () => { Engine.revealNext(st); render(); };
+  linkTools($('revealTools'), g.revealStep === 0);
   if (g.revealStep === 0) focusIn('s-reveal');
   else { const last = list.lastElementChild; last.querySelector('h3').focus({ preventScroll: true }); last.scrollIntoView({ block: 'start', behavior: 'smooth' }); announce(`${st.players[r.order[g.revealStep - 1]].name}: actual total ${r.totals[r.order[g.revealStep - 1]]}.`); }
 }
@@ -1191,12 +1232,141 @@ function renderResults() {
   $('standings').innerHTML = `<thead><tr><th>Player</th><th class="n">Total</th><th>Result</th>${series ? '<th class="n">Points</th>' : ''}</tr></thead><tbody>${body}</tbody>`;
   $('standingsNote').textContent = series ? 'Win a game for 2 points, finish at or under 21 for 1, go over for 0. First to 3 wins.' : 'Everyone can see the cards again on the reveal screen next game. Same players, new questions.';
   const a = $('resultActions'); a.innerHTML = '';
-  if (series && st.champion === null) a.append(button(st.tiebreak ? 'Play the tiebreaker' : 'Next game', 'btn btn-accent', () => { Engine.nextGame(st); render(); }));
-  else if (series) a.append(button('New series, same players', 'btn btn-accent', () => { Engine.newSeries(st); render(); }));
-  else a.append(button('Play again, same players', 'btn btn-accent', () => { Engine.nextGame(st); render(); }));
-  a.append(button('Change players', 'btn', () => { st = null; clearSaved(); render(); }));
+  if (series && st.champion === null) a.append(button(st.tiebreak ? 'Play the tiebreaker' : 'Next game', 'btn btn-accent', () => { st.undo = []; Engine.nextGame(st, R()); render(); }));
+  else if (series) a.append(button('New series, same players', 'btn btn-accent', () => { st.undo = []; Engine.newSeries(st, R()); render(); }));
+  else a.append(button('Play again, same players', 'btn btn-accent', () => { st.undo = []; Engine.nextGame(st, R()); render(); }));
+  if (st.link) a.append(el('p', 'check', `Linked game ${st.link.code}. Tap the same button on every phone to stay matched.`));
+  a.append(button(st.link ? 'Leave the linked game' : 'Change players', 'btn', () => { st = null; clearSaved(); render(); }));
   window.scrollTo({ top: 0 }); b.focus({ preventScroll: true });
   announce(big + ' ' + sub);
+}
+
+/* ---------- linked games (one game mirrored on several phones) ---------- */
+// Every phone builds the deck from the same seed and replays the same taps, so they deal identical cards.
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+let linkUI = null; // the host or join screen while it is open
+function fnv(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+let deckTagCache = null;
+function deckTag() { if (deckTagCache === null) deckTagCache = fnv(BANK.map(b => b.a + '|' + b.q).join('\n')) & 15; return deckTagCache; }
+function mkRnd(link) {
+  return () => {
+    link.rng = (link.rng + 0x6D2B79F5) >>> 0; let t = link.rng;
+    t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function R() { return st && st.link ? mkRnd(st.link) : undefined; }
+function checkBits(seed, count, mode, tag) { return fnv(`${seed}.${count}.${mode}.${tag}`) & 31; }
+function encodeCode(seed, count, mode) {
+  const tag = deckTag(), m = mode === 'series' ? 1 : 0;
+  let n = (((seed * 8 + (count - 2)) * 2 + m) * 16 + tag) * 32 + checkBits(seed, count, m, tag), s = '';
+  for (let i = 0; i < 8; i++) { s = B32[n % 32] + s; n = Math.floor(n / 32); }
+  return s.slice(0, 4) + '-' + s.slice(4);
+}
+function decodeCode(raw) {
+  const s = String(raw || '').toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+  if (!s) return { err: 'Type the code from the host first.' };
+  let n = 0;
+  for (const ch of s) { const v = B32.indexOf(ch); if (v < 0) return { err: `The code doesn't use the character ${ch}. Check it and try again.` }; n = n * 32 + v; }
+  if (s.length !== 8) return { err: 'A game code has 8 letters and numbers, like K7QM-2XRD.' };
+  const chk = n % 32; n = Math.floor(n / 32);
+  const tag = n % 16; n = Math.floor(n / 16);
+  const m = n % 2; n = Math.floor(n / 2);
+  const count = n % 8 + 2, seed = Math.floor(n / 8);
+  if (count > 6 || checkBits(seed, count, m, tag) !== chk) return { err: "That code doesn't check out. Ask the host to read it again, slowly, and make sure you're both playing the same edition of Hunch 21 (regular or holiday)." };
+  if (tag !== deckTag()) return { err: 'This code comes from a phone with a different set of questions. Make sure you are both in the same edition of Hunch 21, and that both phones show the same Build number at the bottom of the setup screen. To update, open the game while online, close it all the way, and open it again.' };
+  return { seed, count, mode: m ? 'series' : 'single' };
+}
+function newSeed() {
+  try { return crypto.getRandomValues(new Uint32Array(1))[0] >>> 5; } catch (e) { return Math.floor(Math.random() * 134217728); }
+}
+function startLinked(seed, count, mode, rawNames) {
+  const link = { code: encodeCode(seed, count, mode), seed, rng: Math.imul(seed ^ 0x5bd1e995, 0x9E3779B1) >>> 0 };
+  const rnd = mkRnd(link);
+  st = Engine.newState(cleanNames(rawNames, count), mode, rnd);
+  st.link = link; st.undo = [];
+  Engine.startGame(st, rnd);
+  linkUI = null; render();
+}
+// One move, with a snapshot so a mistap can be undone. Linked games keep the last 8 snapshots.
+function move(fn) {
+  if (!st.link) { if (fn()) render(); return; }
+  const { undo, ...rest } = st, snap = JSON.stringify(rest);
+  if (fn()) { st.undo = (undo || []).concat(snap).slice(-8); render(); }
+}
+function undoLast() {
+  const u = st.undo || []; if (!u.length) return;
+  const prev = JSON.parse(u[u.length - 1]); prev.undo = u.slice(0, -1); st = prev;
+  render(); announce('Last tap undone. ' + lastText());
+}
+function matchCode() {
+  const g = st.game;
+  const h = fnv(JSON.stringify([st.gameNo, st.deck.length, st.discard.length, st.link.rng, g.current, g.pending,
+    g.active.map(i => [g.hands[i].cards, g.hands[i].guesses, g.hands[i].stopped]), st.players.map(p => p.points)]));
+  return B32[h & 31] + B32[(h >>> 5) & 31] + B32[(h >>> 10) & 31];
+}
+function linkTools(box, canUndo) {
+  box.hidden = !st.link; box.innerHTML = ''; if (!st.link) return;
+  const u = button('Undo last tap', 'btn', undoLast);
+  u.disabled = !(canUndo && st.undo && st.undo.length);
+  const c = el('p', 'check'); c.innerHTML = `Match check <b>${matchCode()}</b> · should be the same on every phone`;
+  box.append(u, c);
+}
+function nameFields(box, count, names, note) {
+  box.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const f = el('div', 'field'); const l = el('label', null, i === 0 ? 'Player 1 (goes first)' : `Player ${i + 1}`); l.htmlFor = 'lname' + i;
+    const inp = el('input'); inp.type = 'text'; inp.id = 'lname' + i; inp.maxLength = 14; inp.autocomplete = 'off'; inp.placeholder = `Player ${i + 1}`; inp.value = names[i] || '';
+    inp.addEventListener('input', () => { names[i] = inp.value; });
+    f.append(l, inp); box.append(f);
+  }
+}
+function renderLink() {
+  show('s-link'); $('meta').textContent = '';
+  const body = $('linkBody'); body.innerHTML = '';
+  const back = button('Back to setup', 'btn', () => { linkUI = null; render(); });
+  if (linkUI.kind === 'host') {
+    $('linkTitle').textContent = 'Your linked game';
+    const code = encodeCode(linkUI.seed, setup.count, setup.mode), names = cleanNames(setup.names, setup.count);
+    const intro = el('p', null, 'Get on a call with the other players and read them this code. On their phones, they tap Join with a code.');
+    const big = el('div', 'codebig', code); big.setAttribute('aria-label', 'Game code ' + code.split('').join(' '));
+    const sub = el('p', 'muted small', `${plural(setup.count, 'player')} · ${setup.mode === 'series' ? 'Series to 3 points' : 'One game'}`);
+    const seatHead = el('p', null, 'Players, in turn order:');
+    const ol = el('ol', 'seats'); names.forEach(n => ol.append(el('li', null, n)));
+    const tip = el('p', 'muted small', 'Everyone types the names in this same order, because the phones deal by seat. To change names or the number of players, go back to setup first.');
+    const shareMsg = el('p', 'msg good'); shareMsg.setAttribute('role', 'status');
+    const text = `Let's play Hunch 21! Open dnadorff.github.io/hunch21, tap Join with a code, and enter ${code}. Players in order: ${names.join(', ')}.`;
+    const share = button('Share the code by text', 'btn', async () => {
+      try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+      try { await navigator.clipboard.writeText(text); shareMsg.textContent = 'Copied. Paste it into a text message.'; } catch (e) { shareMsg.textContent = text; }
+    });
+    const go = button("Everyone's in. Deal the first card", 'btn btn-accent', () => startLinked(linkUI.seed, setup.count, setup.mode, setup.names));
+    body.append(intro, big, sub, seatHead, ol, tip, share, shareMsg, go, back);
+  } else {
+    $('linkTitle').textContent = 'Join a linked game';
+    const f = el('div', 'field'); const l = el('label', null, 'Game code from the host'); l.htmlFor = 'codeIn';
+    const inp = el('input', 'code'); inp.type = 'text'; inp.id = 'codeIn'; inp.maxLength = 9; inp.autocomplete = 'off'; inp.spellcheck = false;
+    inp.setAttribute('autocapitalize', 'characters'); inp.placeholder = 'XXXX-XXXX'; inp.value = linkUI.code || '';
+    f.append(l, inp);
+    const msg = el('p', 'msg'); msg.setAttribute('role', 'alert');
+    const names = el('div', 'names'); const after = el('div', 'stack');
+    const check = button('Check the code', 'btn btn-primary', () => {
+      linkUI.code = inp.value; const r = decodeCode(inp.value);
+      if (r.err) { linkUI.ok = null; msg.className = 'msg bad'; msg.textContent = r.err; after.hidden = true; return; }
+      linkUI.ok = r; msg.className = 'msg good';
+      msg.textContent = `Code works. ${plural(r.count, 'player')}, ${r.mode === 'series' ? 'series to 3 points' : 'one game'}.`;
+      after.hidden = false; nameFields(names, r.count, linkUI.names, true);
+      const first = names.querySelector('input'); if (first) first.focus();
+    });
+    inp.addEventListener('input', () => { if (linkUI.ok) { linkUI.ok = null; after.hidden = true; msg.textContent = ''; } });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') check.click(); });
+    const tip = el('p', 'muted small', "Type everyone's names in the same order as the host's phone. The host's screen lists them.");
+    const go = button('Deal the first card', 'btn btn-accent', () => { const r = linkUI.ok; if (r) startLinked(r.seed, r.count, r.mode, linkUI.names); });
+    after.append(tip, names, go); after.hidden = true;
+    body.append(el('p', null, "Get on a call with the other players, then type the code the host reads out."), f, check, msg, after, back);
+    if (linkUI.ok) check.click();
+  }
+  focusIn('s-link');
 }
 
 /* ---------- wiring ---------- */
@@ -1205,7 +1375,9 @@ $('plus').addEventListener('click', () => { if (setup.count < 6) { setup.count++
 $('modeSingle').addEventListener('click', () => { setup.mode = 'single'; saveSetup(); renderSetup(); });
 $('modeSeries').addEventListener('click', () => { setup.mode = 'series'; saveSetup(); renderSetup(); });
 $('startBtn').addEventListener('click', startNew);
-$('resumeBtn').addEventListener('click', () => { st = load(KEY); render(); });
+$('hostBtn').addEventListener('click', () => { linkUI = { kind: 'host', seed: newSeed() }; render(); });
+$('joinBtn').addEventListener('click', () => { linkUI = { kind: 'join', code: '', names: [], ok: null }; render(); });
+$('resumeBtn').addEventListener('click', () => { st = load(KEY); if (st && st.link && !Array.isArray(st.undo)) st.undo = []; linkUI = null; render(); });
 $('discardBtn').addEventListener('click', () => { clearSaved(); renderSetup(); });
 $('handBtn').addEventListener('click', () => { st.screen = 'turn'; render(); });
 $('rulesBtn').addEventListener('click', () => { resetQuit(); $('rules').showModal(); });
@@ -1224,7 +1396,9 @@ function boot(data) {
   if (setup.mode !== 'series') setup.mode = 'single';
   st = (data && data.state) || load(KEY);
   if (!st || st.v !== 1 || !st.game) st = null;
-  if (st) { try { Engine.topUp(st); } catch (e) { st = null; } }
+  // Linked games keep their deck exactly as dealt, so every phone stays matched.
+  if (st && !st.link) { try { Engine.topUp(st); } catch (e) { st = null; } }
+  if (st && st.link && !Array.isArray(st.undo)) st.undo = [];
   render();
 }
 if (window.claude && window.claude.hot && window.claude.hot.snapshot) window.claude.hot.snapshot(() => ({ state: st, setup }));
